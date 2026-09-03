@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b2a6f">
+  <title>Talma · Control de asistencia</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="stylesheet" href="assets/css/overrides.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="side-rail" id="sideRail">
+      <div class="brand-block">
+        <img class="brand-logo" src="assets/img/talma-logo.png" alt="Talma, líder en servicios aeroportuarios">
+      </div>
+      <nav class="primary-nav" aria-label="Navegación principal">
+        <a href="#resumen" data-nav="resumen"><i class="fa-solid fa-grid-2"></i><span>Resumen</span></a>
+        <a href="#registros" data-nav="registros"><i class="fa-solid fa-table-list"></i><span>Registros</span></a>
+        <a href="#personas" data-nav="personas"><i class="fa-solid fa-user-group"></i><span>Personas</span></a>
+        <a href="#cursos" data-nav="cursos"><i class="fa-solid fa-book-open"></i><span>Cursos</span></a>
+        <a href="#grupos" data-nav="grupos"><i class="fa-solid fa-people-group"></i><span>Grupos</span></a>
+      </nav>
+      <div class="rail-footer">
+        <button class="icon-button" id="themeToggleBtn" aria-label="Cambiar tema"><i class="fa-solid fa-moon"></i></button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="top-commandbar">
+        <button class="icon-button mobile-menu" id="menuToggle" aria-label="Abrir menú"><i class="fa-solid fa-bars"></i></button>
+        <div class="page-context">
+          <span class="eyebrow">Radicación de Mercancías Peligrosas</span>
+          <h1 id="pageTitle">Control de asistencia</h1>
+        </div>
+        <div class="top-actions">
+          <span class="sync-copy" id="lastUpdated">Esperando datos</span>
+          <button class="command-button secondary" id="btnActualizarDatos" onclick="actualizarDatos()"><i class="fa-solid fa-rotate"></i><span>Actualizar</span></button>
+          <button class="command-button primary" onclick="abrirModalNuevo()"><i class="fa-solid fa-plus"></i><span>Nuevo registro</span></button>
+        </div>
+      </header>
+
+      <div class="filter-command" id="filtroBarContainer"></div>
+      <div id="loadErrorPanel" class="d-none app-error"></div>
+
+      <div class="view-stage">
+        <section id="view-resumen" class="tdc-view" aria-labelledby="pageTitle">
+          <div class="executive-hero">
+            <div>
+              <span class="hero-kicker">Tablero del curso</span>
+              <h2>Radicación de Mercancías Peligrosas</h2>
+              <p id="dashHeroSub">0 registros</p>
+            </div>
+            <button class="command-button hero-action" id="dashReviewAbsences" type="button"><i class="fa-solid fa-user-xmark"></i> Revisar quién no asistió</button>
+          </div>
+          <div id="dashKpis" class="metric-grid"></div>
+          <div class="attendance-layout">
+            <article class="surface attendance-overview">
+              <div class="surface-head"><div><span class="section-kicker">Lectura rápida</span><h3>Resultado de asistencia</h3></div><span class="context-pill">Según los filtros actuales</span></div>
+              <div class="attendance-result"><strong id="dashAttendanceRate">0%</strong><span id="dashAttendanceSentence">Sin registros para mostrar.</span></div>
+              <div class="attendance-track" aria-hidden="true"><div id="dashAttendanceFill"></div></div>
+              <div class="attendance-legend"><span><i class="legend-dot attended"></i>Asistieron</span><span><i class="legend-dot absent"></i>No asistieron</span></div>
+            </article>
+            <article class="surface absence-worklist">
+              <div class="surface-head"><div><span class="section-kicker">Validación</span><h3>Personas que no asistieron</h3></div><button class="link-button" id="dashOpenAllAbsences" type="button">Ver todos en Registros</button></div>
+              <div class="table-responsive"><table class="enterprise-table attendance-table"><thead><tr><th>Colaborador</th><th>ID</th><th>Fecha</th><th>Base</th><th>Grupo</th><th>Instructor</th></tr></thead><tbody id="dashAbsences"></tbody></table></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-registros" class="tdc-view">
+          <div class="view-toolbar">
+            <div><span class="section-kicker">Fuente operativa</span><h2>Registro maestro</h2><p><strong id="totalRecords">0</strong> registros sincronizados con Firebase.</p></div>
+            <div class="toolbar-actions">
+              <button class="command-button secondary" onclick="exportarExcel()"><i class="fa-solid fa-file-excel"></i>Exportar</button>
+              <button class="command-button secondary" data-bs-toggle="modal" data-bs-target="#modalCargaMasiva"><i class="fa-solid fa-file-arrow-up"></i>Importar</button>
+            </div>
+          </div>
+          <div class="surface data-surface">
+            <div class="desktop-table-wrap table-responsive">
+              <table class="enterprise-table" id="asistenciasTable">
+                <thead><tr>
+                  <th><input type="checkbox" id="selectAllCheckbox" onclick="toggleSelectAll(this)"></th><th>Acciones</th>
+                  <th data-sort="ID">ID</th><th data-sort="NOMBRES">Colaborador</th><th data-sort="CURSO">Curso</th><th data-sort="PROGRAMA">Programa</th><th data-sort="FECHA">Fecha</th><th data-sort="BASE">Base</th><th data-sort="HORA">Hora</th><th data-sort="GRUPO">Grupo</th><th data-sort="INSTRUCTOR">Instructor</th><th data-sort="ASISTIO">Asistió</th><th data-sort="NOTA">Nota</th><th data-sort="OBSERVACION">Observación</th>
+                </tr></thead>
+                <tbody id="tableBody"><tr><td colspan="14" class="empty-cell">Cargando registros…</td></tr></tbody>
+              </table>
+            </div>
+            <div id="mobileCards" class="mobile-cards"></div>
+            <div class="table-pager"><span id="pagerInfo"></span><div><select id="pagerSize" class="form-select form-select-sm"><option value="25">25 por página</option><option value="50">50 por página</option><option value="100">100 por página</option></select><button id="pagerPrev" class="icon-button"><i class="fa-solid fa-chevron-left"></i></button><button id="pagerNext" class="icon-button"><i class="fa-solid fa-chevron-right"></i></button></div></div>
+            <div class="bulk-bar" id="bulkBar"><span><strong id="bulkCount">0</strong> seleccionados</span><button class="link-button light" onclick="limpiarSeleccion()">Limpiar</button><button class="command-button secondary" onclick="abrirEdicionMasiva()">Editar selección</button><button class="command-button danger" onclick="eliminarSeleccionados()">Eliminar</button></div>
+          </div>
+        </section>
+
+        <section id="view-personas" class="tdc-view">
+          <div class="view-toolbar"><div><span class="section-kicker">Colaboradores</span><h2>Personas</h2><p>Consulta rápida del historial de asistencia por colaborador.</p></div><div id="personKpis" class="compact-kpis"></div></div>
+          <div class="surface data-surface"><div class="table-responsive"><table class="enterprise-table"><thead><tr><th>Colaborador</th><th>ID</th><th>Base</th><th>Cursos</th><th>Asistencia</th><th>Última actividad</th></tr></thead><tbody id="personasTbody"></tbody></table></div><div class="simple-pager" id="personPager"></div></div>
+        </section>
+
+        <section id="view-cursos" class="tdc-view">
+          <div class="view-toolbar"><div><span class="section-kicker">Cursos</span><h2>Cursos</h2><p>Personas, grupos y asistencia por curso.</p></div></div>
+          <div id="courseCards" class="entity-grid"></div>
+        </section>
+
+        <section id="view-grupos" class="tdc-view">
+          <div class="view-toolbar"><div><span class="section-kicker">Ejecución</span><h2>Grupos</h2><p>Seguimiento de cohortes, participación y responsables.</p></div></div>
+          <div id="groupCards" class="entity-grid"></div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <div id="profileOverlay" class="drawer-overlay"><aside class="entity-drawer profile-panel"><div id="profileContent"></div></aside></div>
+  <div id="entityOverlay" class="drawer-overlay"><aside class="entity-drawer"><div id="entityContent"></div></aside></div>
+  <div id="cargaResultado"></div>
+
+  <div class="modal fade" id="modalRegistro" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Gestión de datos</span><h5 class="modal-title" id="modalTitle">Registro de capacitación</h5></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="formErrors" class="form-errors"></div><form id="registroForm"><input type="hidden" id="recordDocId"><div class="form-grid">
+    <label>ID / Cédula *<input id="field_ID" class="form-control" required></label><label class="span-2">Nombres y apellidos *<input id="field_NOMBRES" class="form-control" required></label><label>Programa<input id="field_PROGRAMA" class="form-control"></label>
+    <label class="span-2">Curso<input id="field_CURSO" class="form-control"></label><label>Fecha<input type="date" id="field_FECHA" class="form-control"></label><label>Intensidad<input id="field_INTENSIDAD" class="form-control"></label>
+    <label>Base<input id="field_BASE" class="form-control"></label><label>Hora<input id="field_HORA" class="form-control"></label><label>Salón<input id="field_SALON" class="form-control"></label><label>Grupo<input id="field_GRUPO" class="form-control"></label>
+    <label>Cargo<input id="field_CARGO" class="form-control"></label><label class="span-2">Correo<input type="email" id="field_CORREO" class="form-control"></label><label>Instructor<input id="field_INSTRUCTOR" class="form-control"></label>
+    <label>Asistió<select id="field_ASISTIO" class="form-select"><option>SÍ</option><option>NO</option></select></label><label>Nota<input id="field_NOTA" class="form-control"></label><label class="span-2">Observación<input id="field_OBSERVACION" class="form-control"></label>
+  </div></form></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cancelar</button><button class="command-button primary" onclick="guardarRegistro()">Guardar registro</button></div></div></div></div>
+
+  <div class="modal fade" id="modalCargaMasiva" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Importar Excel o CSV</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="text-muted">El archivo se valida y clasifica antes de escribir en Firebase.</p><input type="file" id="excelFileInput" class="form-control" accept=".xlsx,.xls,.csv"><div id="bulkStatus" class="mt-3"></div></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cancelar</button><button class="command-button primary" onclick="procesarCargaMasiva()">Validar archivo</button></div></div></div></div>
+
+  <div class="modal fade" id="modalValidacion" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5>Validación de carga</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p id="valComentario"></p><div class="validation-metrics"><span>Total <strong id="valTotal">0</strong></span><span>Nuevos <strong id="valNuevos">0</strong></span><span>Actualizan <strong id="valActualizar">0</strong></span><span>Sin cambios <strong id="valSinCambios">0</strong></span><span>Duplicados <strong id="valDuplicados">0</strong></span><span>Errores <strong id="valErrores">0</strong></span></div><ul class="nav nav-tabs"><li><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#prevNuevos"><span id="tabNuevos">Nuevos</span></button></li><li><button class="nav-link" data-bs-toggle="tab" data-bs-target="#prevActualizar"><span id="tabActualizar">Actualizarán</span></button></li><li><button class="nav-link" data-bs-toggle="tab" data-bs-target="#prevSinCambios"><span id="tabSinCambios">Sin cambios</span></button></li><li><button class="nav-link" data-bs-toggle="tab" data-bs-target="#prevErrores"><span id="tabErrores">Errores</span></button></li></ul><div class="tab-content preview-tables"><div class="tab-pane show active" id="prevNuevos"><table><tbody id="prevTableNuevos"></tbody></table></div><div class="tab-pane" id="prevActualizar"><table><tbody id="prevTableActualizar"></tbody></table></div><div class="tab-pane" id="prevSinCambios"><table><tbody id="prevTableSinCambios"></tbody></table></div><div class="tab-pane" id="prevErrores"><table><tbody id="prevTableErrores"></tbody></table></div></div></div><div class="modal-footer"><button class="command-button secondary" onclick="descargarReporteErrores()">Descargar errores</button><button class="command-button secondary" data-bs-dismiss="modal">Cancelar</button><button id="btnConfirmarSubida" class="command-button primary" onclick="confirmarSubidaValidos()">Confirmar carga</button></div></div></div></div>
+
+  <div class="modal fade" id="modalEdicionMasiva" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5>Edición masiva · <span id="bulkEditCount">0</span> registros</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form id="formEdicionMasiva"><div class="bulk-form-grid">
+    <label><input type="checkbox" class="bulk-field-toggle" data-campo="INSTRUCTOR" data-target="bulk_INSTRUCTOR" onchange="toggleBulkField(this)"> Instructor<input id="bulk_INSTRUCTOR" class="form-control" disabled></label><label><input type="checkbox" class="bulk-field-toggle" data-campo="FECHA" data-target="bulk_FECHA" onchange="toggleBulkField(this)"> Fecha<input type="date" id="bulk_FECHA" class="form-control" disabled></label><label><input type="checkbox" class="bulk-field-toggle" data-campo="HORA" data-target="bulk_HORA" onchange="toggleBulkField(this)"> Hora<input id="bulk_HORA" class="form-control" disabled></label><label><input type="checkbox" class="bulk-field-toggle" data-campo="SALON" data-target="bulk_SALON" onchange="toggleBulkField(this)"> Salón<input id="bulk_SALON" class="form-control" disabled></label><label><input type="checkbox" class="bulk-field-toggle" data-campo="GRUPO" data-target="bulk_GRUPO" onchange="toggleBulkField(this)"> Grupo<input id="bulk_GRUPO" class="form-control" disabled></label><label><input type="checkbox" class="bulk-field-toggle" data-campo="BASE" data-target="bulk_BASE" onchange="toggleBulkField(this)"> Base<input id="bulk_BASE" class="form-control" disabled></label><label><input type="checkbox" class="bulk-field-toggle" data-campo="CURSO" data-target="bulk_CURSO" onchange="toggleBulkField(this)"> Curso<input id="bulk_CURSO" class="form-control" disabled></label><label><input type="checkbox" class="bulk-field-toggle" data-campo="PROGRAMA" data-target="bulk_PROGRAMA" onchange="toggleBulkField(this)"> Programa<input id="bulk_PROGRAMA" class="form-control" disabled></label><label><input type="checkbox" class="bulk-field-toggle" data-campo="ASISTIO" data-target="bulk_ASISTIO" onchange="toggleBulkField(this)"> Asistió<select id="bulk_ASISTIO" class="form-select" disabled><option>SÍ</option><option>NO</option></select></label>
+  </div></form></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cancelar</button><button class="command-button primary" onclick="aplicarEdicionMasiva()">Aplicar cambios</button></div></div></div></div>
+
+  <div class="modal fade" id="modalCertificado" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Certificado personalizado</span><h5 id="certModalTitle">Datos del certificado</h5></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="certRecordId"><div class="certificate-editor"><div class="certificate-fields">
+    <label>Número de certificado<input id="certNumero" class="form-control" placeholder="CI-15161"></label>
+    <label>Categoría<input id="certCategoria" class="form-control" placeholder="Cat. 8"></label>
+    <label>Metodología<select id="certMetodologia" class="form-select"><option>PRESENCIAL</option><option>VIRTUAL</option><option>HÍBRIDA</option></select></label>
+    <label>Ciudad<input id="certCiudad" class="form-control" placeholder="ADZ"></label>
+    <label>Tratamiento del instructor<select id="certTratamiento" class="form-select"><option value="la Instructora">la Instructora</option><option value="el Instructor">el Instructor</option><option value="la persona instructora">la persona instructora</option></select></label>
+    <label>Licencia IET<input id="certLicencia" class="form-control" placeholder="31172210"></label>
+  </div><div class="certificate-preview"><span class="section-kicker">Vista previa del contenido</span><h4>CERTIFICA</h4><p id="certPreviewBody"></p><p id="certPreviewInstructor"></p><small>La plantilla institucional, firmas y logotipos se conservan en el PDF final.</small></div></div></div><div class="modal-footer certificate-actions"><span id="certStatus" class="me-auto small text-muted"></span><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button class="command-button secondary" onclick="guardarDatosCertificado()"><i class="fa-solid fa-floppy-disk"></i>Guardar datos</button><button class="command-button secondary" onclick="descargarCertificadoPDF()"><i class="fa-solid fa-download"></i>Descargar PDF</button><button class="command-button primary" onclick="guardarCertificadoFirebase()"><i class="fa-solid fa-cloud-arrow-up"></i>Guardar PDF en Firebase</button></div></div></div></div>
+
+  <div class="modal fade" id="modalVistaCertificado" tabindex="-1" aria-labelledby="certViewerTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-lg-down"><div class="modal-content certificate-viewer-modal"><div class="modal-header"><div><span class="section-kicker">Certificado del colaborador</span><h5 id="certViewerTitle">Certificado</h5></div><button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body certificate-viewer-body"><div id="certViewerLoading" class="certificate-viewer-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Preparando certificado…</div><iframe id="certViewerFrame" class="certificate-viewer-frame d-none" title="Vista previa del certificado PDF"></iframe></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button id="certViewerDownload" class="command-button primary" onclick="descargarCertificadoVisto()" disabled><i class="fa-solid fa-download"></i>Descargar certificado</button></div></div></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/theme.js"></script>
+  <script type="module" src="assets/js/app.js?v=4"></script>
+</body>
+</html>
