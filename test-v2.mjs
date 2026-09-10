@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { aggregateRecords, buildDataModel, filterRecords } from "./assets/js/data-engine.js";
-import { certificateTextRuns, certificateTexts, dateWords, puedeCertificar } from "./assets/js/certificados-core.js";
+import {
+  certificateTextRuns,
+  certificateTexts,
+  dateWords,
+  instructorCertificado,
+  normalizarNumeroCertificado,
+  puedeCertificar,
+  secuenciaCertificado,
+} from "./assets/js/certificados-core.js";
+import { mapearEncabezados, normalizarFilaExcel } from "./assets/js/utils.js";
 
 const bases = ["BOG", "MDE", "CTG", "CLO", "BAQ"];
 const courses = ["Básico Inicial", "Básico Recurrente", "Refuerzo", "Especializado"];
@@ -71,8 +80,24 @@ assert.match(boldBody, /1047446658/);
 assert.match(boldBody, /PRESENCIAL/);
 assert.match(boldBody, /24\|JULIO\|2026/);
 assert.ok(richCertificate.instructor.some(run => run.bold && run.text === "ADRIANA VANEGAS"));
-assert.equal(puedeCertificar({ ASISTIO: "NO" }), false);
-assert.equal(puedeCertificar({ ASISTIO: "SÍ" }), true);
+assert.equal(puedeCertificar({ ASISTIO: "NO", NOTA: "100" }), false);
+assert.equal(puedeCertificar({ ASISTIO: "SÍ", NOTA: "80" }), false);
+assert.equal(puedeCertificar({ ASISTIO: "SÍ", NOTA: "80,5" }), true);
+assert.equal(puedeCertificar({ ASISTIO: "SÍ", NOTA: "100" }), true);
+assert.deepEqual(instructorCertificado("ÁLVARO LÓPEZ"), { licencia: "94314461", tratamiento: "el Instructor" });
+assert.deepEqual(instructorCertificado("JUAN ARIAS"), { licencia: "80022447", tratamiento: "el Instructor" });
+assert.deepEqual(instructorCertificado("ADRIANA VANEGAS"), { licencia: "31172210", tratamiento: "la Instructora" });
+const juanCertificate = certificateTexts({
+  NOMBRES: "Persona Prueba", ID: "100000001", CURSO: "Básico Inicial", FECHA: "2026-07-24",
+  INTENSIDAD: "8 horas", NOTA: "95", BASE: "BOG", INSTRUCTOR: "Juan Arias", ASISTIO: "SÍ",
+}, { CERT_CATEGORIA: "Cat. 8", CERT_CIUDAD: "BOG", CERT_LICENCIA_INSTRUCTOR: "INCORRECTA" });
+assert.match(juanCertificate.instructorText, /JUAN ARIAS habilitado con licencia IET No\. 80022447/);
+assert.equal(normalizarNumeroCertificado("N°: CI-15161"), "CI-15161");
+assert.equal(normalizarNumeroCertificado("15162"), "CI-15162");
+assert.equal(secuenciaCertificado("CI-15162"), 15162);
+const migrationHeaders = mapearEncabezados(["Cédula", "Nombres y apellidos", "N° Certificado"]);
+const migrated = normalizarFilaExcel({ "Cédula": "1047446658", "Nombres y apellidos": "Alexander Escobar", "N° Certificado": "CI-15161" }, migrationHeaders);
+assert.equal(migrated.CERT_NUMERO, "CI-15161");
 
 // Umbrales deliberadamente holgados: detectan regresiones algorítmicas
 // (por ejemplo O(n²)) sin depender de una máquina concreta.

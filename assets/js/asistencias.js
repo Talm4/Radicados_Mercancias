@@ -14,6 +14,7 @@ import { escapeHtml } from "./ui.js";
 import {
   normalizarCedula, clasificarRegistro, conTrazas, clavePersonaCurso, claveExactaPersonaCursoFecha,
 } from "./capacitacion.js";
+import { normalizarNumeroCertificado } from "./certificados-core.js";
 
 let selectedIds = new Set();
 let pendingImport = { filas: [], resumen: null };
@@ -422,7 +423,7 @@ window.exportarExcel = function () {
   if (data.length === 0) return showToast("No hay datos visibles para exportar.", "warning");
   const cleanData = data.map(({ _docId, ...rest }) => {
     const ordenado = {};
-    CAMPOS.forEach(c => ordenado[c] = rest[c] || "");
+    [...CAMPOS, "CERT_NUMERO"].forEach(c => ordenado[c] = rest[c] || "");
     return ordenado;
   });
   const ws = XLSX.utils.json_to_sheet(cleanData);
@@ -482,6 +483,36 @@ window.procesarCargaMasiva = function () {
         const clave = claveExactaPersonaCursoFecha(f.rec.ID, f.rec.CURSO, f.rec.FECHA);
         if (vistos.has(clave)) { f.duplicadoInterno = true; f.erroresFinal.push("Duplicado interno del archivo (misma cédula, curso y fecha)"); }
         else vistos.add(clave);
+      });
+
+      // Los códigos que llegan en una migración se conservan, pero nunca se
+      // permite que el mismo CI pertenezca a dos cédulas diferentes.
+      const propietariosCodigo = new Map();
+      store.data.forEach(rec => {
+        const codigo = normalizarNumeroCertificado(rec.CERT_NUMERO);
+        if (!codigo) return;
+        const propietario = propietariosCodigo.get(codigo);
+        propietariosCodigo.set(codigo, propietario && propietario !== rec.ID ? "__CONFLICTO__" : rec.ID);
+      });
+      filas.forEach(f => {
+        if (!f.rec.CERT_NUMERO) return;
+        const codigo = normalizarNumeroCertificado(f.rec.CERT_NUMERO);
+        if (!codigo) {
+          f.erroresFinal.push("Código de certificado inválido; usa el formato CI-15161");
+          return;
+        }
+        f.rec.CERT_NUMERO = codigo;
+        const codigosPersona = [...new Set(store.getPerson(f.rec.ID).map(rec => normalizarNumeroCertificado(rec.CERT_NUMERO)).filter(Boolean))];
+        if (codigosPersona.length && !codigosPersona.includes(codigo)) {
+          f.erroresFinal.push(`La cédula ya conserva el código ${codigosPersona[0]}; no se reemplazará por ${codigo}`);
+          return;
+        }
+        const propietario = propietariosCodigo.get(codigo);
+        if (propietario === "__CONFLICTO__" || (propietario && propietario !== f.rec.ID)) {
+          f.erroresFinal.push(`${codigo} ya está asignado a otra cédula`);
+          return;
+        }
+        propietariosCodigo.set(codigo, f.rec.ID);
       });
 
       // 3) Clasificar cada fila frente a lo existente en Firestore:
@@ -622,7 +653,16 @@ window.confirmarSubidaValidos = async function () {
       const batch = writeBatch(db);
       reales.slice(i, i + 450).forEach(op => {
         const { f } = op;
-        const recConTrazas = conTrazas(f.rec, "Carga Excel", op.tipo === "crear" ? "crear" : "actualizar", op.tipo === "actualizar" ? f.objetivo : null);
+        const certificadoExistente = op.tipo === "actualizar" ? {
+          CERT_NUMERO: f.objetivo?.CERT_NUMERO || f.rec.CERT_NUMERO || "",
+          CERT_CATEGORIA: f.objetivo?.CERT_CATEGORIA || "",
+          CERT_METODOLOGIA: f.objetivo?.CERT_METODOLOGIA || "",
+          CERT_CIUDAD: f.objetivo?.CERT_CIUDAD || "",
+          CERT_TRATAMIENTO_INSTRUCTOR: f.objetivo?.CERT_TRATAMIENTO_INSTRUCTOR || "",
+          CERT_LICENCIA_INSTRUCTOR: f.objetivo?.CERT_LICENCIA_INSTRUCTOR || "",
+          CERT_ACTUALIZADO: f.objetivo?.CERT_ACTUALIZADO || "",
+        } : {};
+        const recConTrazas = conTrazas({ ...f.rec, ...certificadoExistente }, "Carga Excel", op.tipo === "crear" ? "crear" : "actualizar", op.tipo === "actualizar" ? f.objetivo : null);
         if (op.tipo === "crear") {
           batch.set(doc(colRef), recConTrazas);
           creados++;

@@ -170,6 +170,21 @@ body { background: var(--canvas); }
   font-weight: 650;
 }
 
+.certificate-field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: .75rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+#certNumero[readonly], #certLicencia[readonly], #certTratamiento:disabled {
+  background: color-mix(in srgb, var(--navy-900) 5%, var(--surface));
+  color: var(--text);
+  opacity: 1;
+}
+
 .certificate-preview {
   min-height: 340px;
   padding: 28px 30px;

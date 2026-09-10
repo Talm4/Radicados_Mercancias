@@ -29,6 +29,27 @@ La interfaz se simplificó para responder una sola pregunta operativa: **quién 
 - Los certificados generados se pueden guardar en Firebase Storage bajo `certificados/{colaboradorId}/...`.
 - Se eliminó del certificado el párrafo que indicaba la vigencia del curso.
 
+## Numeración única y migración
+
+- Cada colaborador conserva un único código `CI-#####`; el PDF lo imprime como `N°: CI-#####`.
+- Los códigos existentes en `CERT_NUMERO` se consideran migrados y se conservan sin reemplazarlos.
+- La importación reconoce las columnas `CERT_NUMERO`, `Número de certificado`, `N° Certificado` y `Código de certificado`, aunque estén en otro orden.
+- Una importación no puede reemplazar el código que ya tenga una cédula ni asignar el mismo código a dos personas.
+- Los códigos nuevos comienzan en `CI-15161` o continúan después del mayor número existente.
+- La asignación usa una transacción de Firestore, un contador global y una reserva por código para evitar colisiones entre usuarios concurrentes.
+- Firestore guarda la relación en `certificadosPersonas`, la reserva en `certificadosCodigos` y el contador en `configuracion/certificados`.
+- El código también queda guardado como `CERT_NUMERO` en el registro de capacitación que generó el certificado.
+
+## Instructor y elegibilidad
+
+- Álvaro López: licencia IET `94314461`, tratamiento `el Instructor`.
+- Juan Arias: licencia IET `80022447`, tratamiento `el Instructor`.
+- Adriana Vanegas: licencia IET `31172210`, tratamiento `la Instructora`.
+- La coincidencia de nombres ignora mayúsculas, tildes y espacios adicionales.
+- Para estos instructores, licencia y tratamiento son automáticos y no se pueden alterar desde el formulario del certificado.
+- El certificado solo está disponible cuando `ASISTIO` es afirmativo y la nota numérica es estrictamente superior a 80.
+- La restricción se valida en el perfil, el editor, el visor, la descarga, la generación del PDF y la subida a Firebase Storage.
+
 ## Rendimiento para más de 5.000 registros
 
 ### Problemas corregidos previamente
@@ -63,6 +84,6 @@ La interfaz se simplificó para responder una sola pregunta operativa: **quién 
 - Sintaxis comprobada en todos los módulos JavaScript.
 - Suite de lógica de negocio original aprobada.
 - Suite V2 aprobada con 12.000 registros sintéticos.
-- En la ejecución final: modelo e índices en 398,3 ms; filtro indexado en 3,4 ms; agregación en 2,3 ms.
+- En la ejecución final: modelo e índices en 1.383 ms; filtro indexado en 9,4 ms; agregación en 5,7 ms.
 - Restricción de certificados probada para `ASISTIO = NO` y `ASISTIO = SÍ`.
 - Respuesta HTTP 200 verificada al servir `index.html` desde un servidor estático.

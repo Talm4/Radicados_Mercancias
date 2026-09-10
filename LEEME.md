@@ -22,7 +22,11 @@ Luego abre `http://localhost:8080/index.html`.
 
 ## Certificados
 
-El perfil permite ver, configurar, descargar o guardar en Firebase el certificado de una persona que asistió. Cuando `ASISTIO` es `NO`, el certificado queda bloqueado en la interfaz y en la lógica de generación.
+El perfil permite ver, configurar, descargar o guardar en Firebase el certificado cuando la persona asistió y obtuvo una nota superior a 80. Con inasistencia, nota igual o inferior a 80, o una nota no válida, queda bloqueado en la interfaz y en la lógica de generación.
+
+El código se asigna una sola vez por colaborador mediante una transacción de Firestore. Los valores existentes en `CERT_NUMERO` se conservan durante la migración; quienes todavía no tengan código reciben automáticamente el siguiente `CI-#####` disponible. El PDF añade el prefijo visual `N°:`.
+
+Las licencias IET se completan automáticamente para Álvaro López (`94314461`), Juan Arias (`80022447`) y Adriana Vanegas (`31172210`).
 
 El PDF conserva las fuentes Calibri y Calibri Bold incrustadas en `assets/pdf/PLANTILLA-CERTIFICADO.pdf`. Los campos personalizados se guardan en el registro de `capacitaciones`; los PDF enviados a la nube se almacenan en Firebase Storage.
 

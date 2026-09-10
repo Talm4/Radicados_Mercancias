@@ -3,15 +3,16 @@ import { store } from "./store.js";
 import { agregarPorPersona } from "./agregados.js";
 import { escapeHtml, asistenciaPill } from "./ui.js";
 import { formatFechaDisplay } from "./utils.js";
-import { puedeCertificar } from "./certificados-core.js";
+import { evaluarCertificacion } from "./certificados-core.js";
 
 let currentPersonId = null;
 
 function overlay() { return document.getElementById("profileOverlay"); }
 
 function certificateCell(rec) {
-  if (!puedeCertificar(rec)) {
-    return '<span class="certificate-unavailable" title="El certificado solo está disponible para quienes asistieron"><i class="fa-solid fa-lock"></i> No disponible</span>';
+  const eligibility = evaluarCertificacion(rec);
+  if (!eligibility.elegible) {
+    return `<span class="certificate-unavailable" title="${escapeHtml(eligibility.motivo)}"><i class="fa-solid fa-lock"></i> No disponible</span>`;
   }
   return `<div class="certificate-row-actions">
     <button class="command-button primary certificate-button" type="button" onclick="verCertificado('${escapeHtml(rec._docId)}')"><i class="fa-solid fa-eye"></i>Ver</button>
