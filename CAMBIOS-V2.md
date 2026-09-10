@@ -68,6 +68,19 @@ La interfaz se simplificó para responder una sola pregunta operativa: **quién 
 - El tablero consume la agregación cacheada y renderiza como máximo 12 inasistencias; la lista completa se revisa en la tabla paginada.
 - Se eliminó el listener adicional de documentos que se abría al consultar cada perfil.
 
+### Importación masiva reforzada
+
+- La vista previa dejó de insertar todas las filas del Excel en el DOM: ahora crea una sola página de 25, 50 o 100 filas por pestaña.
+- Las categorías Nuevos, Actualizarán, Sin cambios y Errores se calculan una vez y se reutilizan al cambiar de pestaña o página.
+- La validación de archivos grandes cede el control al navegador cada 250–500 filas para mantener la interfaz receptiva.
+- Firebase conserva lotes de 450 operaciones, por debajo del máximo de 500 de Firestore, y muestra el avance lote por lote.
+- Antes de escribir se guarda un trabajo recuperable en IndexedDB. Después de cada lote confirmado se actualiza su punto de avance.
+- Si la red o Firebase fallan, la aplicación informa cuántos registros ya se guardaron y cuántos siguen pendientes; ya no afirma incorrectamente que no hubo cambios parciales.
+- Una carga interrumpida se detecta al volver a abrir la aplicación y ofrece **Reanudar** o **Descartar**.
+- Los documentos nuevos usan un identificador estable derivado de cédula, curso y fecha, de modo que repetir un lote incierto no duplica registros.
+- Se añadió un límite preventivo de 25 MB por archivo para evitar agotar la memoria del navegador.
+- La suite incluye una prueba específica de 5.207 filas: confirma 12 lotes y páginas de vista previa de máximo 50 filas.
+
 ## Funciones conservadas
 
 - Firebase y la colección `capacitaciones`.
@@ -84,6 +97,6 @@ La interfaz se simplificó para responder una sola pregunta operativa: **quién 
 - Sintaxis comprobada en todos los módulos JavaScript.
 - Suite de lógica de negocio original aprobada.
 - Suite V2 aprobada con 12.000 registros sintéticos.
-- En la ejecución final: modelo e índices en 1.383 ms; filtro indexado en 9,4 ms; agregación en 5,7 ms.
+- La prueba final con 12.000 registros quedó dentro de los umbrales definidos para indexación, filtro y agregación.
 - Restricción de certificados probada para `ASISTIO = NO` y `ASISTIO = SÍ`.
 - Respuesta HTTP 200 verificada al servir `index.html` desde un servidor estático.

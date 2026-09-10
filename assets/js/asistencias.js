@@ -15,9 +15,19 @@ import {
   normalizarCedula, clasificarRegistro, conTrazas, clavePersonaCurso, claveExactaPersonaCursoFecha,
 } from "./capacitacion.js";
 import { normalizarNumeroCertificado } from "./certificados-core.js";
+import {
+  MAX_ARCHIVO_MB, TAMANO_LOTE_FIRESTORE, TAMANO_PAGINA_PREVIA,
+  categorizarFilasImportacion, cederAlNavegador, crearIdTrabajo,
+  eliminarTrabajoImportacion, guardarTrabajoImportacion, huellaArchivo,
+  idDeterministaRegistro, leerTrabajoPendiente, lotesDe, paginaPrevia,
+} from "./importacion-resiliente.js";
 
 let selectedIds = new Set();
-let pendingImport = { filas: [], resumen: null };
+let pendingImport = { filas: [], resumen: null, categorias: null, archivo: null };
+let previewCategory = "nuevos";
+let previewPage = 1;
+let previewSize = TAMANO_PAGINA_PREVIA;
+let activeUploadJob = null;
 
 let sortKey = "FECHA";
 let sortDir = -1;
@@ -60,6 +70,29 @@ export function initAsistencias() {
 
   document.getElementById("pagerPrev").addEventListener("click", () => { page--; render(store); });
   document.getElementById("pagerNext").addEventListener("click", () => { page++; render(store); });
+
+  document.getElementById("previewPrev")?.addEventListener("click", () => {
+    previewPage--;
+    renderPrevisualizacionActiva();
+  });
+  document.getElementById("previewNext")?.addEventListener("click", () => {
+    previewPage++;
+    renderPrevisualizacionActiva();
+  });
+  document.getElementById("previewPageSize")?.addEventListener("change", e => {
+    previewSize = Number(e.target.value) || TAMANO_PAGINA_PREVIA;
+    previewPage = 1;
+    renderPrevisualizacionActiva();
+  });
+  document.querySelectorAll("#modalValidacion [data-preview-category]").forEach(tab => {
+    tab.addEventListener("shown.bs.tab", () => {
+      previewCategory = tab.dataset.previewCategory;
+      previewPage = 1;
+      renderPrevisualizacionActiva();
+    });
+  });
+
+  detectarCargaPendiente();
 }
 
 export function render(s) {
@@ -439,9 +472,15 @@ window.procesarCargaMasiva = function () {
   const file = fileInput.files[0];
   const statusDiv = document.getElementById("bulkStatus");
   if (!file) return showToast("Selecciona un archivo Excel o CSV.", "warning");
+  if (activeUploadJob?.estado === "pausado" || activeUploadJob?.estado === "procesando") {
+    return showToast("Hay una carga pendiente. Reanúdala o descártala antes de iniciar otro archivo.", "warning");
+  }
+  if (file.size > MAX_ARCHIVO_MB * 1024 * 1024) {
+    return showToast(`El archivo supera ${MAX_ARCHIVO_MB} MB. Divídelo en archivos más pequeños para evitar que el navegador se quede sin memoria.`, "danger");
+  }
   statusDiv.innerText = "Leyendo archivo...";
   const reader = new FileReader();
-  reader.onload = function (e) {
+  reader.onload = async function (e) {
     try {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
@@ -461,18 +500,24 @@ window.procesarCargaMasiva = function () {
       }
       // 1) VALIDAR y limpiar cada fila (cédula, nombre, curso, fechas).
       const filas = [];
-      jsonData.forEach((rowRaw, idx) => {
-        const rec = normalizarFilaExcel(rowRaw, mapa);
-        if (!rec.PROGRAMA) rec.PROGRAMA = "Mercancías Peligrosas";
-        rec.ID = normalizarCedula(rec.ID);
-        rec.CURSO = String(rec.CURSO || "").trim().replace(/\s+/g, " ");
-        const { valido, errores } = validarRegistro(rec);
-        const erroresFinal = [...errores];
-        if (rec._fechaValida === false) erroresFinal.push("Fecha con formato irreconocible");
-        delete rec._fechaValida;
-        if (!rec.CURSO) erroresFinal.push("Curso vacío");
-        filas.push({ fila: idx + 2, rec, erroresFinal });
-      });
+      const bloque = 250;
+      for (let inicio = 0; inicio < jsonData.length; inicio += bloque) {
+        const fin = Math.min(inicio + bloque, jsonData.length);
+        statusDiv.innerText = `Validando ${fin.toLocaleString("es-CO")} de ${jsonData.length.toLocaleString("es-CO")} filas...`;
+        for (let idx = inicio; idx < fin; idx++) {
+          const rec = normalizarFilaExcel(jsonData[idx], mapa);
+          if (!rec.PROGRAMA) rec.PROGRAMA = "Mercancías Peligrosas";
+          rec.ID = normalizarCedula(rec.ID);
+          rec.CURSO = String(rec.CURSO || "").trim().replace(/\s+/g, " ");
+          const { errores } = validarRegistro(rec);
+          const erroresFinal = [...errores];
+          if (rec._fechaValida === false) erroresFinal.push("Fecha con formato irreconocible");
+          delete rec._fechaValida;
+          if (!rec.CURSO) erroresFinal.push("Curso vacío");
+          filas.push({ fila: idx + 2, rec, erroresFinal });
+        }
+        await cederAlNavegador();
+      }
 
       // 2) Detectar DUPLICADOS INTERNOS del archivo (misma cédula+curso y
       //    misma fecha dentro del mismo Excel). Solo la primera ocurrencia
@@ -494,38 +539,52 @@ window.procesarCargaMasiva = function () {
         const propietario = propietariosCodigo.get(codigo);
         propietariosCodigo.set(codigo, propietario && propietario !== rec.ID ? "__CONFLICTO__" : rec.ID);
       });
-      filas.forEach(f => {
-        if (!f.rec.CERT_NUMERO) return;
+      for (let idx = 0; idx < filas.length; idx++) {
+        const f = filas[idx];
+        if (!f.rec.CERT_NUMERO) continue;
         const codigo = normalizarNumeroCertificado(f.rec.CERT_NUMERO);
         if (!codigo) {
           f.erroresFinal.push("Código de certificado inválido; usa el formato CI-15161");
-          return;
+          continue;
         }
         f.rec.CERT_NUMERO = codigo;
         const codigosPersona = [...new Set(store.getPerson(f.rec.ID).map(rec => normalizarNumeroCertificado(rec.CERT_NUMERO)).filter(Boolean))];
         if (codigosPersona.length && !codigosPersona.includes(codigo)) {
           f.erroresFinal.push(`La cédula ya conserva el código ${codigosPersona[0]}; no se reemplazará por ${codigo}`);
-          return;
+          continue;
         }
         const propietario = propietariosCodigo.get(codigo);
         if (propietario === "__CONFLICTO__" || (propietario && propietario !== f.rec.ID)) {
           f.erroresFinal.push(`${codigo} ya está asignado a otra cédula`);
-          return;
+          continue;
         }
         propietariosCodigo.set(codigo, f.rec.ID);
-      });
+        if (idx > 0 && idx % 500 === 0) await cederAlNavegador();
+      }
 
       // 3) Clasificar cada fila frente a lo existente en Firestore:
       //    NUEVO | ACTUALIZAR | SIN CAMBIOS | CON ERROR.
-      const filasClasificadas = filas.map(f => {
+      const filasClasificadas = [];
+      for (let idx = 0; idx < filas.length; idx++) {
+        const f = filas[idx];
         if (f.erroresFinal.length > 0) {
-          return { ...f, accion: "error", objetivo: null, clase: null };
+          filasClasificadas.push({ ...f, accion: "error", objetivo: null, clase: null });
+        } else {
+          const { accion, objetivo, motivo } = clasificarRegistro(f.rec, store.getPerson(f.rec.ID), store.estadoHoy);
+          filasClasificadas.push({ ...f, accion, objetivo, motivo });
         }
-        const { accion, objetivo, motivo } = clasificarRegistro(f.rec, store.getPerson(f.rec.ID), store.estadoHoy);
-        return { ...f, accion, objetivo, motivo };
-      });
+        if (idx > 0 && idx % 500 === 0) {
+          statusDiv.innerText = `Clasificando ${idx.toLocaleString("es-CO")} de ${filas.length.toLocaleString("es-CO")} filas...`;
+          await cederAlNavegador();
+        }
+      }
 
-      pendingImport = { filas: filasClasificadas, resumen: null };
+      pendingImport = {
+        filas: filasClasificadas,
+        resumen: null,
+        categorias: null,
+        archivo: { nombre: file.name, tamano: file.size, huella: huellaArchivo(file), trabajoId: crearIdTrabajo(file) },
+      };
       mostrarPrevisualizacionCarga(filasClasificadas);
       statusDiv.innerText = "";
       modalCargaMasiva.hide();
@@ -539,7 +598,11 @@ window.procesarCargaMasiva = function () {
 };
 
 function accionTitulo(accion) {
-  return { nuevo: "Nuevo", actualizar: "Actualizará", sin_cambios: "Sin cambios", error: "Con error", duplicado: "Duplicado" }[accion] || accion;
+  return {
+    nuevo: "Nuevo", nuevos: "Nuevos", actualizar: "Actualizarán",
+    sin_cambios: "Sin cambios", sincambios: "Sin cambios",
+    error: "Con error", errores: "Errores", duplicado: "Duplicado",
+  }[accion] || accion;
 }
 
 function mostrarPrevisualizacionCarga(filas) {
@@ -554,6 +617,8 @@ function mostrarPrevisualizacionCarga(filas) {
   });
 
   pendingImport.resumen = { total: filas.length, nuevos, actualizar, sinCambios, conError, duplicadosInternos };
+  pendingImport.categorias = categorizarFilasImportacion(filas);
+  document.getElementById("previewContent")?.classList.remove("d-none");
 
   document.getElementById("valTotal").innerText = filas.length;
   document.getElementById("valNuevos").innerText = nuevos;
@@ -573,13 +638,40 @@ function mostrarPrevisualizacionCarga(filas) {
     btnTab.innerText = `${accionTitulo(tipo)} (${count})`;
   });
 
-  renderTablaPrevisualizacion("prevTableNuevos", filas.filter(f => f.accion === "nuevo"));
-  renderTablaPrevisualizacion("prevTableActualizar", filas.filter(f => f.accion === "actualizar"));
-  renderTablaPrevisualizacion("prevTableSinCambios", filas.filter(f => f.accion === "sin_cambios"));
-  renderTablaPrevisualizacion("prevTableErrores", filas.filter(f => f.erroresFinal.length > 0));
+  previewCategory = "nuevos";
+  previewPage = 1;
+  document.getElementById("previewPageSize").value = String(previewSize);
+  document.querySelector('#modalValidacion [data-preview-category="nuevos"]')?.click();
+  renderPrevisualizacionActiva();
+  ocultarProgresoCarga();
 
   document.getElementById("btnConfirmarSubida").disabled = (nuevos + actualizar) === 0;
   modalValidacion.show();
+}
+
+const PREVIEW_TABLE_IDS = {
+  nuevos: "prevTableNuevos",
+  actualizar: "prevTableActualizar",
+  sinCambios: "prevTableSinCambios",
+  errores: "prevTableErrores",
+};
+
+function renderPrevisualizacionActiva() {
+  if (!pendingImport.categorias) return;
+  const filas = pendingImport.categorias[previewCategory] || [];
+  const datos = paginaPrevia(filas, previewPage, previewSize);
+  previewPage = datos.pagina;
+  renderTablaPrevisualizacion(PREVIEW_TABLE_IDS[previewCategory], datos.filas);
+  const info = document.getElementById("previewInfo");
+  if (info) {
+    info.innerText = datos.total
+      ? `${datos.inicio.toLocaleString("es-CO")}–${datos.fin.toLocaleString("es-CO")} de ${datos.total.toLocaleString("es-CO")}`
+      : "0 registros";
+  }
+  const prev = document.getElementById("previewPrev");
+  const next = document.getElementById("previewNext");
+  if (prev) prev.disabled = datos.pagina <= 1;
+  if (next) next.disabled = datos.pagina >= datos.paginas;
 }
 
 function renderTablaPrevisualizacion(tbodyId, filas) {
@@ -620,6 +712,10 @@ window.descargarReporteErrores = function () {
 // UPSERT real: CREAR los nuevos y ACTUALIZAR los existentes, respetando el
 // límite de 450 operaciones por batch de Firestore. Nunca se duplica.
 window.confirmarSubidaValidos = async function () {
+  if (activeUploadJob?.estado === "pausado") {
+    await ejecutarTrabajoImportacion(activeUploadJob);
+    return;
+  }
   const clientes = pendingImport.filas.filter(f =>
     (f.accion === "nuevo" || f.accion === "actualizar") && f.erroresFinal.length === 0
   );
@@ -646,42 +742,187 @@ window.confirmarSubidaValidos = async function () {
     });
   });
   const reales = operaciones.filter(o => !o.noop);
+  const operacionesPersistibles = reales.map(op => {
+    const { f } = op;
+    const certificadoExistente = op.tipo === "actualizar" ? {
+      CERT_NUMERO: f.objetivo?.CERT_NUMERO || f.rec.CERT_NUMERO || "",
+      CERT_CATEGORIA: f.objetivo?.CERT_CATEGORIA || "",
+      CERT_METODOLOGIA: f.objetivo?.CERT_METODOLOGIA || "",
+      CERT_CIUDAD: f.objetivo?.CERT_CIUDAD || "",
+      CERT_TRATAMIENTO_INSTRUCTOR: f.objetivo?.CERT_TRATAMIENTO_INSTRUCTOR || "",
+      CERT_LICENCIA_INSTRUCTOR: f.objetivo?.CERT_LICENCIA_INSTRUCTOR || "",
+      CERT_ACTUALIZADO: f.objetivo?.CERT_ACTUALIZADO || "",
+    } : {};
+    const data = conTrazas(
+      { ...f.rec, ...certificadoExistente },
+      "Carga Excel",
+      op.tipo === "crear" ? "crear" : "actualizar",
+      op.tipo === "actualizar" ? f.objetivo : null,
+    );
+    return {
+      tipo: op.tipo,
+      docId: op.tipo === "crear" ? idDeterministaRegistro(f.rec) : f.objetivo._docId,
+      data,
+    };
+  });
+
+  const ahora = new Date().toISOString();
+  const trabajo = {
+    id: pendingImport.archivo?.trabajoId || `carga_${Date.now()}`,
+    archivo: pendingImport.archivo || { nombre: "archivo", huella: "" },
+    estado: "procesando",
+    creadoEn: ahora,
+    actualizadoEn: ahora,
+    siguienteLote: 0,
+    totalLotes: Math.ceil(operacionesPersistibles.length / TAMANO_LOTE_FIRESTORE),
+    procesados: 0,
+    creadosCompletados: 0,
+    actualizadosCompletados: 0,
+    operaciones: operacionesPersistibles,
+    resumen: pendingImport.resumen,
+  };
 
   try {
-    let creados = 0, actualizados = 0;
-    for (let i = 0; i < reales.length; i += 450) {
+    await guardarTrabajoImportacion(trabajo);
+  } catch (error) {
+    console.error(error);
+    return showToast("No se pudo preparar la recuperación de la carga. Libera espacio del navegador e inténtalo de nuevo.", "danger");
+  }
+  await ejecutarTrabajoImportacion(trabajo);
+};
+
+async function ejecutarTrabajoImportacion(trabajo) {
+  activeUploadJob = trabajo;
+  trabajo.estado = "procesando";
+  trabajo.actualizadoEn = new Date().toISOString();
+  const lotes = lotesDe(trabajo.operaciones, TAMANO_LOTE_FIRESTORE);
+  const boton = document.getElementById("btnConfirmarSubida");
+  if (boton) { boton.disabled = true; boton.innerText = "Cargando..."; }
+  mostrarProgresoCarga();
+  actualizarProgresoCarga(trabajo);
+
+  try {
+    await guardarTrabajoImportacion(trabajo);
+    for (let indice = trabajo.siguienteLote || 0; indice < lotes.length; indice++) {
+      const lote = lotes[indice];
       const batch = writeBatch(db);
-      reales.slice(i, i + 450).forEach(op => {
-        const { f } = op;
-        const certificadoExistente = op.tipo === "actualizar" ? {
-          CERT_NUMERO: f.objetivo?.CERT_NUMERO || f.rec.CERT_NUMERO || "",
-          CERT_CATEGORIA: f.objetivo?.CERT_CATEGORIA || "",
-          CERT_METODOLOGIA: f.objetivo?.CERT_METODOLOGIA || "",
-          CERT_CIUDAD: f.objetivo?.CERT_CIUDAD || "",
-          CERT_TRATAMIENTO_INSTRUCTOR: f.objetivo?.CERT_TRATAMIENTO_INSTRUCTOR || "",
-          CERT_LICENCIA_INSTRUCTOR: f.objetivo?.CERT_LICENCIA_INSTRUCTOR || "",
-          CERT_ACTUALIZADO: f.objetivo?.CERT_ACTUALIZADO || "",
-        } : {};
-        const recConTrazas = conTrazas({ ...f.rec, ...certificadoExistente }, "Carga Excel", op.tipo === "crear" ? "crear" : "actualizar", op.tipo === "actualizar" ? f.objetivo : null);
-        if (op.tipo === "crear") {
-          batch.set(doc(colRef), recConTrazas);
-          creados++;
-        } else {
-          batch.set(doc(db, "capacitaciones", f.objetivo._docId), recConTrazas, { merge: false });
-          actualizados++;
-        }
-      });
+      lote.forEach(op => batch.set(doc(db, "capacitaciones", op.docId), op.data, { merge: false }));
       await batch.commit();
+
+      trabajo.siguienteLote = indice + 1;
+      trabajo.procesados = Math.min(trabajo.siguienteLote * TAMANO_LOTE_FIRESTORE, trabajo.operaciones.length);
+      trabajo.creadosCompletados = (trabajo.creadosCompletados || 0) + lote.filter(op => op.tipo === "crear").length;
+      trabajo.actualizadosCompletados = (trabajo.actualizadosCompletados || 0) + lote.filter(op => op.tipo === "actualizar").length;
+      trabajo.actualizadoEn = new Date().toISOString();
+      await guardarTrabajoImportacion(trabajo);
+      actualizarProgresoCarga(trabajo);
+      await cederAlNavegador();
     }
-    showToast(`Carga completada: ${creados} creado(s), ${actualizados} actualizado(s).`, "success");
+
+    trabajo.estado = "completado";
+    try { await eliminarTrabajoImportacion(trabajo.id); }
+    catch (cleanupError) { console.warn("La carga terminó, pero no se pudo limpiar su punto de recuperación.", cleanupError); }
+    const creados = trabajo.creadosCompletados || 0;
+    const actualizados = trabajo.actualizadosCompletados || 0;
+    showToast(`Carga completada: ${creados.toLocaleString("es-CO")} creados y ${actualizados.toLocaleString("es-CO")} actualizados.`, "success");
     modalValidacion.hide();
-    mostrarResultadoCarga({ ...pendingImport.resumen, creados, actualizados });
-    pendingImport = { filas: [], resumen: null };
+    mostrarResultadoCarga({ ...trabajo.resumen, creados, actualizados });
+    pendingImport = { filas: [], resumen: null, categorias: null, archivo: null };
+    activeUploadJob = null;
     document.getElementById("excelFileInput").value = "";
   } catch (err) {
     console.error(err);
-    showToast("Error al subir los registros. No se guardaron cambios parciales pendientes.", "danger");
+    trabajo.estado = "pausado";
+    trabajo.ultimoError = err?.message || "Error de conexión";
+    trabajo.actualizadoEn = new Date().toISOString();
+    try { await guardarTrabajoImportacion(trabajo); } catch (saveError) { console.error(saveError); }
+    actualizarProgresoCarga(trabajo, true);
+    if (boton) { boton.disabled = false; boton.innerText = "Reintentar pendientes"; }
+    const pendientes = Math.max(0, trabajo.operaciones.length - (trabajo.procesados || 0));
+    showToast(`La carga se pausó: ${trabajo.procesados.toLocaleString("es-CO")} registros quedaron guardados y ${pendientes.toLocaleString("es-CO")} siguen pendientes. Puedes reanudarla sin duplicar datos.`, "danger");
   }
+}
+
+function mostrarProgresoCarga() {
+  document.getElementById("cargaProgress")?.classList.remove("d-none");
+}
+
+function ocultarProgresoCarga() {
+  document.getElementById("cargaProgress")?.classList.add("d-none");
+  const boton = document.getElementById("btnConfirmarSubida");
+  if (boton) boton.innerText = "Confirmar carga";
+}
+
+function actualizarProgresoCarga(trabajo, pausado = false) {
+  const total = trabajo.operaciones.length;
+  const procesados = Math.min(trabajo.procesados || 0, total);
+  const porcentaje = total ? Math.round((procesados / total) * 100) : 100;
+  const barra = document.getElementById("cargaProgressBar");
+  if (barra) {
+    barra.style.width = `${porcentaje}%`;
+    barra.setAttribute("aria-valuenow", String(porcentaje));
+    barra.classList.toggle("paused", pausado);
+  }
+  const estado = document.getElementById("cargaProgressText");
+  if (estado) estado.innerText = pausado
+    ? `Carga pausada en ${procesados.toLocaleString("es-CO")} de ${total.toLocaleString("es-CO")} registros.`
+    : `${procesados.toLocaleString("es-CO")} de ${total.toLocaleString("es-CO")} registros · lote ${trabajo.siguienteLote || 0} de ${trabajo.totalLotes || 0}`;
+  const detalle = document.getElementById("cargaProgressDetail");
+  if (detalle) detalle.innerText = `${(trabajo.creadosCompletados || 0).toLocaleString("es-CO")} creados · ${(trabajo.actualizadosCompletados || 0).toLocaleString("es-CO")} actualizados`;
+}
+
+async function detectarCargaPendiente() {
+  try {
+    const trabajo = await leerTrabajoPendiente();
+    if (trabajo) mostrarRecuperacionCarga(trabajo);
+  } catch (error) {
+    console.warn("No se pudo consultar una carga pendiente.", error);
+  }
+}
+
+function mostrarRecuperacionCarga(trabajo) {
+  activeUploadJob = trabajo;
+  const cont = document.getElementById("cargaResultado");
+  if (!cont) return;
+  const pendientes = Math.max(0, trabajo.operaciones.length - (trabajo.procesados || 0));
+  cont.innerHTML = `
+    <div class="carga-resultado carga-recuperable">
+      <div class="cr-titulo"><i class="fa-solid fa-rotate"></i> Carga pendiente</div>
+      <p>Quedan <strong>${pendientes.toLocaleString("es-CO")}</strong> registros de <strong>${escapeHtml(trabajo.archivo?.nombre || "un archivo")}</strong>.</p>
+      <div class="recovery-actions">
+        <button class="command-button primary" onclick="reanudarCargaPendiente()">Reanudar</button>
+        <button class="command-button secondary" onclick="descartarCargaPendiente()">Descartar</button>
+      </div>
+    </div>`;
+}
+
+window.reanudarCargaPendiente = async function () {
+  let trabajo = activeUploadJob;
+  if (!trabajo) trabajo = await leerTrabajoPendiente();
+  if (!trabajo) return showToast("No hay una carga pendiente.", "warning");
+  pendingImport.resumen = trabajo.resumen;
+  document.getElementById("previewContent")?.classList.add("d-none");
+  document.getElementById("valComentario").innerText = `Reanudando ${trabajo.archivo?.nombre || "la carga"} desde el último lote confirmado.`;
+  const resumen = trabajo.resumen || {};
+  document.getElementById("valTotal").innerText = resumen.total || trabajo.operaciones.length;
+  document.getElementById("valNuevos").innerText = resumen.nuevos || 0;
+  document.getElementById("valActualizar").innerText = resumen.actualizar || 0;
+  document.getElementById("valSinCambios").innerText = resumen.sinCambios || 0;
+  document.getElementById("valDuplicados").innerText = resumen.duplicadosInternos || 0;
+  document.getElementById("valErrores").innerText = (resumen.conError || 0) + (resumen.duplicadosInternos || 0);
+  modalValidacion.show();
+  await ejecutarTrabajoImportacion(trabajo);
+};
+
+window.descartarCargaPendiente = async function () {
+  const trabajo = activeUploadJob || await leerTrabajoPendiente();
+  if (!trabajo) return;
+  if (!confirm("¿Descartar el avance pendiente? Los lotes que Firebase ya confirmó permanecerán guardados.")) return;
+  await eliminarTrabajoImportacion(trabajo.id);
+  activeUploadJob = null;
+  const cont = document.getElementById("cargaResultado");
+  if (cont) cont.innerHTML = "";
+  showToast("Se descartó el punto de recuperación. Los registros ya confirmados se conservaron.", "warning");
 };
 
 function mostrarResultadoCarga(res) {

@@ -41,6 +41,12 @@ Firestore (un listener)
   → tablero y tablas paginadas
 ```
 
+## Importaciones de más de 5.000 filas
+
+La vista previa está paginada y Firebase recibe lotes de 450 operaciones con avance visible. El navegador guarda un punto de recuperación después de cada lote; si se corta la conexión o se cierra la página, al regresar aparecerá la opción **Reanudar**. Los lotes repetidos son idempotentes y no crean copias del mismo registro.
+
+Se admiten archivos Excel o CSV de hasta 25 MB. Conviene mantener una fila de encabezados reconocible y las columnas ID/Cédula y Nombres; las columnas adicionales se ignoran.
+
 ## Pruebas
 
 ```bash

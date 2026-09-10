@@ -11,6 +11,10 @@ import {
   secuenciaCertificado,
 } from "./assets/js/certificados-core.js";
 import { mapearEncabezados, normalizarFilaExcel } from "./assets/js/utils.js";
+import {
+  TAMANO_LOTE_FIRESTORE, categorizarFilasImportacion, idDeterministaRegistro,
+  lotesDe, paginaPrevia,
+} from "./assets/js/importacion-resiliente.js";
 
 const bases = ["BOG", "MDE", "CTG", "CLO", "BAQ"];
 const courses = ["Básico Inicial", "Básico Recurrente", "Refuerzo", "Especializado"];
@@ -98,6 +102,23 @@ assert.equal(secuenciaCertificado("CI-15162"), 15162);
 const migrationHeaders = mapearEncabezados(["Cédula", "Nombres y apellidos", "N° Certificado"]);
 const migrated = normalizarFilaExcel({ "Cédula": "1047446658", "Nombres y apellidos": "Alexander Escobar", "N° Certificado": "CI-15161" }, migrationHeaders);
 assert.equal(migrated.CERT_NUMERO, "CI-15161");
+
+const filasImportacion = Array.from({ length: 5207 }, (_, i) => ({
+  fila: i + 2,
+  accion: i % 10 === 0 ? "actualizar" : "nuevo",
+  erroresFinal: i % 97 === 0 ? ["Dato inválido"] : [],
+  rec: records[i % records.length],
+}));
+const categoriasImportacion = categorizarFilasImportacion(filasImportacion);
+assert.equal(Object.values(categoriasImportacion).reduce((n, grupo) => n + grupo.length, 0), 5207);
+const ultimaPagina = paginaPrevia(categoriasImportacion.nuevos, 999, 50);
+assert.ok(ultimaPagina.filas.length <= 50);
+assert.equal(ultimaPagina.pagina, ultimaPagina.paginas);
+const lotesImportacion = lotesDe(Array.from({ length: 5207 }, (_, i) => i), TAMANO_LOTE_FIRESTORE);
+assert.equal(lotesImportacion.length, 12);
+assert.ok(lotesImportacion.every(lote => lote.length <= 450));
+assert.equal(idDeterministaRegistro(records[0]), idDeterministaRegistro({ ...records[0] }));
+assert.notEqual(idDeterministaRegistro(records[0]), idDeterministaRegistro(records[1]));
 
 // Umbrales deliberadamente holgados: detectan regresiones algorítmicas
 // (por ejemplo O(n²)) sin depender de una máquina concreta.

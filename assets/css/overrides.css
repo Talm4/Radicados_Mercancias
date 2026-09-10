@@ -252,6 +252,62 @@ body { background: var(--canvas); }
   text-align: center;
 }
 
+.import-file-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: .82rem;
+  line-height: 1.4;
+}
+
+.import-file-note i { margin-top: 2px; color: var(--azure); }
+.import-status { min-height: 1.4rem; color: var(--navy-700); font-weight: 600; }
+
+.preview-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 9px;
+  padding-top: 12px;
+  color: var(--text-muted);
+  font-size: .78rem;
+}
+
+.preview-pagination > span { margin-right: auto; }
+.preview-pagination label { display: flex; align-items: center; gap: 7px; }
+.preview-pagination .form-select { width: 74px; }
+.preview-pagination .command-button { min-height: 32px; padding: 5px 10px; }
+
+.import-progress {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.import-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+  font-size: .82rem;
+}
+
+.import-progress-head span { color: var(--text-muted); }
+.import-progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: var(--border-subtle); }
+.import-progress-track > span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--talma-2); transition: width .2s ease; }
+.import-progress-track > span.paused { background: #c98b00; }
+.import-progress small { display: block; margin-top: 9px; color: var(--text-muted); }
+.carga-recuperable p { margin: 8px 0 12px; }
+.recovery-actions { display: flex; gap: 8px; }
+
 @media (max-width: 820px) {
   .certificate-editor { grid-template-columns: 1fr; }
   .certificate-actions { align-items: stretch; }
@@ -263,6 +319,9 @@ body { background: var(--canvas); }
   .metric-grid { grid-template-columns: 1fr; }
   .executive-hero { display: block; }
   .hero-action { margin-top: 20px; }
+  .preview-pagination { flex-wrap: wrap; justify-content: flex-start; }
+  .preview-pagination > span { flex-basis: 100%; }
+  .import-progress-head { display: grid; gap: 3px; }
 }
 
 @media (min-width: 821px) and (max-width: 1240px) {
