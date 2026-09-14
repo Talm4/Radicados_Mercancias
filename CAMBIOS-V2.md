@@ -50,6 +50,22 @@ La interfaz se simplificó para responder una sola pregunta operativa: **quién 
 - El certificado solo está disponible cuando `ASISTIO` es afirmativo y la nota numérica es estrictamente superior a 80.
 - La restricción se valida en el perfil, el editor, el visor, la descarga, la generación del PDF y la subida a Firebase Storage.
 
+## Notas verificadas desde Aprende Talma
+
+- Se añadió el logotipo suministrado de Microsoft Power Apps en la navegación y en la acción **Revisar notas**.
+- Se inspeccionó el reporte real `reporteglobal.xlsx`: contiene 549.796 registros y las columnas `cedula`, `curso`, `nota`, `nombre completo` y `fecha de finalizacion del curso`.
+- El servidor de Aprende Talma no publica `Access-Control-Allow-Origin`; una página estática no puede descargar el Excel directamente sin infringir CORS.
+- La descarga, el filtrado y la actualización se ejecutan diariamente en GitHub Actions, sin Power Automate Premium ni credenciales expuestas en el navegador.
+- El proceso conserva exclusivamente los cursos LMS Inicial de 8 horas y Recurrente de 4 horas indicados por el usuario.
+- La verificación inicial encontró 3.420 combinaciones únicas de persona y curso: 2.755 iniciales y 665 recurrentes.
+- La comparación usa cédula y familia de curso. Ignora tildes, mayúsculas, signos y espacios adicionales.
+- Para no alterar el historial, cuando una persona tiene varias recurrencias solo se propone actualizar el registro más reciente de cada familia.
+- La nota se redondea al entero más cercano. Valores vacíos, no numéricos, inferiores a 0 o superiores a 100 se omiten.
+- GitHub compara el reporte con Firebase y escribe únicamente las notas diferentes; la página muestra el resumen de la última ejecución.
+- La escritura usa lotes de 400 y añade `NOTA_ORIGEN`, `NOTA_FECHA_REPORTE` y `NOTA_VERIFICADA_EN` para trazabilidad.
+- La clave de servicio se lee exclusivamente desde el secreto `FIREBASE_SERVICE_ACCOUNT` de GitHub.
+- El archivo público `notas-resumen.json` solo contiene cantidades y fechas; no contiene cédulas, nombres ni calificaciones.
+
 ## Rendimiento para más de 5.000 registros
 
 ### Problemas corregidos previamente

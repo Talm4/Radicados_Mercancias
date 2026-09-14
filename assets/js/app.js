@@ -8,6 +8,7 @@ import { renderCursos, abrirCurso, cerrarEntityDrawer } from "./cursos.js";
 import { renderGrupos, abrirGrupo } from "./grupos.js";
 import { initPerfil, abrirPerfil, renderPerfil } from "./perfil.js";
 import { initCertificados } from "./certificados.js";
+import { initNotas } from "./notas.js";
 import { renderEstado } from "./ui.js";
 import { showToast } from "./utils.js";
 
@@ -56,6 +57,7 @@ initFiltros();
 initAsistencias();
 initPerfil();
 initCertificados();
+initNotas();
 initRouter(() => renderCurrent());
 store.subscribe(() => { renderChrome(); renderCurrent(); });
 store.iniciar();

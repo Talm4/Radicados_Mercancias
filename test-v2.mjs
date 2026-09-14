@@ -120,6 +120,7 @@ assert.ok(lotesImportacion.every(lote => lote.length <= 450));
 assert.equal(idDeterministaRegistro(records[0]), idDeterministaRegistro({ ...records[0] }));
 assert.notEqual(idDeterministaRegistro(records[0]), idDeterministaRegistro(records[1]));
 
+
 // Umbrales deliberadamente holgados: detectan regresiones algorítmicas
 // (por ejemplo O(n²)) sin depender de una máquina concreta.
 assert.ok(buildMs < 4000, `Indexación demasiado lenta: ${buildMs.toFixed(1)} ms`);

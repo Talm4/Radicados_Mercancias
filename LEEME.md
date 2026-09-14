@@ -47,11 +47,33 @@ La vista previa está paginada y Firebase recibe lotes de 450 operaciones con av
 
 Se admiten archivos Excel o CSV de hasta 25 MB. Conviene mantener una fila de encabezados reconocible y las columnas ID/Cédula y Nombres; las columnas adicionales se ignoran.
 
+## Revisión automática de notas
+
+La automatización compara Firebase con el reporte de Aprende Talma. La coincidencia usa la cédula y el tipo de curso, sin distinguir tildes ni mayúsculas:
+
+- `Básico inicial` y sus variaciones usan el curso LMS de 8 horas, Inicial 2026V2.
+- `Básico repaso`, `Básico recurrente` y sus variaciones usan el curso LMS de 4 horas, Recurrente 2026V2.
+
+El proceso toma el registro más reciente por persona y tipo de curso, redondea la nota al entero más cercano y actualiza Firebase. Las notas iguales no se vuelven a guardar y los registros sin coincidencia permanecen intactos. El botón **Revisar notas** muestra el estado de la última ejecución y actualiza los datos visibles.
+
+El archivo completo del LMS pesa aproximadamente 55 MB y el servidor no permite descargarlo directamente desde JavaScript por CORS. Por eso `.github/workflows/actualizar-notas.yml` ejecuta `scripts/actualizar_notas.py` todos los días a las 5:00 a. m. de Colombia y escribe las notas directamente en Firebase. Ninguna cédula o nota se publica como archivo estático.
+
+Al subir el proyecto a GitHub:
+
+1. En Firebase Console abre **Configuración del proyecto → Cuentas de servicio** y genera una clave privada nueva.
+2. En GitHub abre **Settings → Secrets and variables → Actions** y crea el secreto `FIREBASE_SERVICE_ACCOUNT`; pega como valor todo el contenido JSON de la clave.
+3. En **Settings → Actions → General**, habilita **Read and write permissions** para `GITHUB_TOKEN`.
+4. Abre **Actions → Actualizar notas de Aprende Talma** y ejecuta **Run workflow** una vez.
+5. Publica la web normalmente. Desde ese momento Firebase se actualizará cada día sin Power Automate Premium y sin claves en el navegador.
+
+La clave privada solo debe existir en GitHub Secrets. No debe copiarse dentro de JavaScript, del ZIP ni del repositorio.
+
 ## Pruebas
 
 ```bash
 node test-logica.mjs
 node test-v2.mjs
+python test-notas.py
 ```
 
 Consulta `CAMBIOS-V2.md` para ver el detalle técnico y las mediciones de rendimiento.
