@@ -54,13 +54,6 @@ export function diffDias(isoMayor, isoMenor) {
   return Math.round((a - b) / 86400000);
 }
 
-function diffMeses(isoMenor, isoMayor) {
-  const a = new Date(isoMenor + "T00:00:00Z");
-  const b = new Date(isoMayor + "T00:00:00Z");
-  if (isNaN(a) || isNaN(b)) return NaN;
-  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
-}
-
 // Convierte una fecha ISO a "yyyy-mm-dd" (o "" si no es válida).
 function isoFecha(value) {
   const f = parseFechaFlexible(value);
@@ -105,8 +98,11 @@ export function clavePersonaCurso(id, curso) {
   return `${normalizarCedula(id)}|${normKey(curso)}`;
 }
 
-export function claveExactaPersonaCursoFecha(id, curso, fecha) {
-  return `${clavePersonaCurso(id, curso)}|${isoFecha(fecha)}`;
+export function claveCitacion(rec) {
+  return [
+    normalizarCedula(rec?.ID), normKey(rec?.CURSO), isoFecha(rec?.FECHA),
+    normKey(rec?.GRUPO), normKey(rec?.HORA), normKey(rec?.SALON),
+  ].join("|");
 }
 
 /* ============================ Estados de capacitación ============================ */
@@ -153,13 +149,10 @@ export function estadoDeRegistro(rec, hoy = hoyLocal()) {
 }
 
 /* ============================ Reglas de UPSERT ============================ */
-// Busca los registros existentes de la misma persona y curso.
+// Busca únicamente la misma citación: persona, curso y fecha.
 function candidatosDe(rec, existentes) {
-  const id = normalizarCedula(rec.ID);
-  const ck = normKey(rec.CURSO);
-  return existentes.filter(e =>
-    normalizarCedula(e.ID) === id && normKey(e.CURSO) === ck
-  );
+  const clave = claveCitacion(rec);
+  return existentes.filter(e => claveCitacion(e) === clave);
 }
 
 function mismoContenido(recA, recB) {
@@ -173,67 +166,23 @@ function mismoContenido(recA, recB) {
 // Clasifica una fila nueva frente a los registros existentes.
 // Devuelve { accion: 'nuevo' | 'actualizar' | 'sin_cambios' | 'error',
 //            objetivo: registroExistente|null, motivo: string }
-// Reglas de negocio:
-//   · CÉDULA + CURSO identifican a la persona dentro de su vigencia.
-//   · Misma fecha exacta → sin cambios (duplicado exacto) o actualización.
-//   · La nueva fecha cae en la MISMA ventana de vigencia que el registro
-//     previo (distancia < vigencia en meses) → ACTUALIZAR (nunca duplicar).
-//   · El registro previo sigue vigente HOY → ACTUALIZAR.
-//   · La nueva fecha cae DESPUÉS del vencimiento del previo → la vigencia
-//     del previo terminó → CREAR nuevo registro (nueva recurrencia), y el
-//     anterior permanece como historial.
-//   · Registro previo VENCIDO (hoy > vencimiento) → CREAR nuevo registro.
-export function clasificarRegistro(rec, existentes, hoy = hoyLocal()) {
+// Una cédula puede tener varias citaciones del mismo curso. Solo se actualiza
+// un documento cuando coinciden cédula + curso + fecha + grupo + hora + salón.
+// Una citación diferente siempre crea otro registro y conserva el historial.
+export function clasificarRegistro(rec, existentes, _hoy = hoyLocal()) {
   const id = normalizarCedula(rec.ID);
 
   if (!id) return { accion: "error", objetivo: null, motivo: "Cédula vacía" };
 
   const candidatos = candidatosDe(rec, existentes);
   if (candidatos.length === 0) {
-    return { accion: "nuevo", objetivo: null, motivo: "Sin registro previo del curso" };
+    return { accion: "nuevo", objetivo: null, motivo: "Nueva citación o día de capacitación" };
   }
-
-  const ordenados = candidatos
-    .map(e => ({ e, fe: isoFecha(e.FECHA) }))
-    .sort((a, b) => (b.fe || "").localeCompare(a.fe || ""));
-  const mejor = ordenados[0].e;
-  const mejorIso = ordenados[0].fe;
-  const nuevaIso = isoFecha(rec.FECHA);
-
-  // 1) Duplicado exacto: misma persona, curso y fecha.
-  if (nuevaIso && mejorIso && nuevaIso === mejorIso) {
-    if (mismoContenido(rec, mejor)) {
-      return { accion: "sin_cambios", objetivo: mejor, motivo: "Ya existe registro idéntico (misma fecha)" };
-    }
-    return { accion: "actualizar", objetivo: mejor, motivo: "Actualiza registro existente (misma fecha)" };
+  const objetivo = candidatos[0];
+  if (mismoContenido(rec, objetivo)) {
+    return { accion: "sin_cambios", objetivo, motivo: "Ya existe esta misma citación" };
   }
-
-  // 2a) El registro previo no tiene fecha: sin referencia de vigencia.
-  //      Se actualiza para no duplicar a la persona+curso.
-  if (!mejorIso) {
-    return { accion: "actualizar", objetivo: mejor, motivo: "Registro previo sin fecha: se actualiza para no duplicar" };
-  }
-
-  const mesesVig = vigenciaMesesCurso(rec.CURSO);
-  const vencimientoPrevio = addMeses(mejorIso, mesesVig);
-
-  const dif = nuevaIso ? diffMeses(mejorIso, nuevaIso) : NaN;
-  const mismaVentana = Number.isFinite(dif) && Math.abs(dif) < mesesVig;
-  const previoVigente = mejorIso && hoy && hoy <= vencimientoPrevio;
-
-  // La nueva fecha ya superó el vencimiento del registro previo → nueva
-  // recurrencia, incluso si el registro previo todavía está "vigente" hoy.
-  if (nuevaIso && nuevaIso >= vencimientoPrevio) {
-    return { accion: "nuevo", objetivo: null, motivo: "El registro previo venció antes de esta nueva fecha" };
-  }
-
-  // Misma ventana de vigencia o previo vigente hoy → ACTUALIZAR.
-  if (mismaVentana || previoVigente) {
-    return { accion: "actualizar", objetivo: mejor, motivo: "Misma persona y curso dentro de la vigencia" };
-  }
-
-  // Registro previo vencido y fecha nueva fuera de su ventana → CREAR.
-  return { accion: "nuevo", objetivo: null, motivo: "Registro anterior fuera de vigencia (nueva recurrencia)" };
+  return { accion: "actualizar", objetivo, motivo: "Actualiza la misma citación" };
 }
 
 /* ============================ Trazabilidad ============================ */

@@ -55,7 +55,7 @@ function fnv1a(texto, semilla = 0x811c9dc5) {
 }
 
 export function idDeterministaRegistro(rec) {
-  const base = [rec?.ID, rec?.CURSO, rec?.FECHA]
+  const base = [rec?.ID, rec?.CURSO, rec?.FECHA, rec?.GRUPO, rec?.HORA, rec?.SALON]
     .map(v => String(v || "").trim().toUpperCase())
     .join("|");
   // Dos pasadas con semillas distintas mantienen el identificador compacto y

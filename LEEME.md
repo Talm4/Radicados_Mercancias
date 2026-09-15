@@ -4,13 +4,13 @@ Aplicación web para validar la asistencia al curso de Radicación de Mercancía
 
 ## Uso
 
-Sirve esta carpeta desde un servidor HTTP estático y abre `index.html`:
+En Windows ejecuta:
 
-```bash
-python -m http.server 8080
+```powershell
+.\INICIAR-PLATAFORMA.ps1
 ```
 
-Luego abre `http://localhost:8080/index.html`.
+Luego abre `http://127.0.0.1:4173/index.html`. Este servidor forma parte del proyecto y mantiene activa la descarga horaria. Un servidor estático común muestra la interfaz, pero no puede ejecutar la descarga automática.
 
 ## Navegación
 
@@ -39,6 +39,12 @@ Firestore (un listener)
   → filtros cacheados
   → agregación de asistencia
   → tablero y tablas paginadas
+
+Servidor local
+  → descarga privada de reporteglobal.xlsx cada 60 minutos
+  → lectura en streaming
+  → cruce por cédula y familia de curso
+  → actualización por lotes en Firestore
 ```
 
 ## Importaciones de más de 5.000 filas
@@ -47,6 +53,8 @@ La vista previa está paginada y Firebase recibe lotes de 450 operaciones con av
 
 Se admiten archivos Excel o CSV de hasta 25 MB. Conviene mantener una fila de encabezados reconocible y las columnas ID/Cédula y Nombres; las columnas adicionales se ignoran.
 
+La cédula no se considera un registro único. Una persona puede aparecer varias veces en el mismo curso. Solo se actualiza una fila existente cuando coinciden cédula, curso, fecha, grupo, hora y salón; cualquier citación diferente se crea como otro registro y permanece visible en el historial.
+
 ## Revisión automática de notas
 
 La automatización compara Firebase con el reporte de Aprende Talma. La coincidencia usa la cédula y el tipo de curso, sin distinguir tildes ni mayúsculas:
@@ -54,19 +62,29 @@ La automatización compara Firebase con el reporte de Aprende Talma. La coincide
 - `Básico inicial` y sus variaciones usan el curso LMS de 8 horas, Inicial 2026V2.
 - `Básico repaso`, `Básico recurrente` y sus variaciones usan el curso LMS de 4 horas, Recurrente 2026V2.
 
-El proceso toma el registro más reciente por persona y tipo de curso, redondea la nota al entero más cercano y actualiza Firebase. Las notas iguales no se vuelven a guardar y los registros sin coincidencia permanecen intactos. El botón **Revisar notas** muestra el estado de la última ejecución y actualiza los datos visibles.
+El proceso toma el registro más reciente por persona y tipo de curso, redondea la nota al entero más cercano y actualiza Firebase. Distingue notas vacías que fueron cargadas, notas digitadas que fueron corregidas y notas que ya coincidían. Los registros sin coincidencia permanecen intactos.
 
-El archivo completo del LMS pesa aproximadamente 55 MB y el servidor no permite descargarlo directamente desde JavaScript por CORS. Por eso `.github/workflows/actualizar-notas.yml` ejecuta `scripts/actualizar_notas.py` todos los días a las 5:00 a. m. de Colombia y escribe las notas directamente en Firebase. Ninguna cédula o nota se publica como archivo estático.
+La coincidencia principal usa la cédula. Antes de escribir, también compara los componentes del nombre; una diferencia importante se informa como conflicto de identidad y bloquea esa actualización. Cada nota válida queda marcada con `NOTA_ORIGEN`, `NOTA_FECHA_REPORTE` y `NOTA_VERIFICADA_EN`; la tabla muestra un visto verde junto a las notas verificadas.
 
-Al subir el proyecto a GitHub:
+El archivo completo del LMS pesa aproximadamente 55 MB y el servidor de Aprende no permite descargarlo directamente desde JavaScript por CORS. `servidor.py` resuelve esto dentro del código de la aplicación: descarga el archivo al iniciar si no existe y vuelve a descargarlo cuando transcurren 60 minutos. La copia se guarda en `.cache/reporteglobal.xlsx`, fuera de los recursos públicos y excluida de Git.
 
-1. En Firebase Console abre **Configuración del proyecto → Cuentas de servicio** y genera una clave privada nueva.
-2. En GitHub abre **Settings → Secrets and variables → Actions** y crea el secreto `FIREBASE_SERVICE_ACCOUNT`; pega como valor todo el contenido JSON de la clave.
-3. En **Settings → Actions → General**, habilita **Read and write permissions** para `GITHUB_TOKEN`.
-4. Abre **Actions → Actualizar notas de Aprende Talma** y ejecuta **Run workflow** una vez.
-5. Publica la web normalmente. Desde ese momento Firebase se actualizará cada día sin Power Automate Premium y sin claves en el navegador.
+Para escribir las notas en Firestore, guarda localmente la credencial como `firebase-service-account.json` junto a `INICIAR-PLATAFORMA.ps1`. El servidor bloquea el acceso web a ese archivo y `.gitignore` evita que se suba al repositorio. Sin esa credencial, el sistema descarga, almacena y valida el Excel, pero no modifica Firebase.
 
-La clave privada solo debe existir en GitHub Secrets. No debe copiarse dentro de JavaScript, del ZIP ni del repositorio.
+El botón **Estado de notas** consulta el proceso local. **Descargar ahora** permite adelantar la siguiente revisión sin esperar una hora.
+
+También se conserva una ejecución única independiente:
+
+```powershell
+.\SINCRONIZAR-NOTAS.ps1
+```
+
+La escritura usa la API REST de Firestore autenticada por OAuth. No usa GitHub Actions, Firebase Functions, Cloud Scheduler ni cambia el plan de Firebase.
+
+La auditoría local de solo lectura se puede repetir sin modificar Firebase:
+
+```bash
+python scripts/actualizar_notas.py --source ../reporteglobal.xlsx --audit-public
+```
 
 ## Pruebas
 

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b2a6f">
   <title>Talma · Control de asistencia</title>
+  <link rel="icon" type="image/png" href="assets/img/power-apps-logo.png">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
@@ -18,7 +19,6 @@
     <aside class="side-rail" id="sideRail">
       <div class="brand-block">
         <img class="brand-logo" src="assets/img/talma-logo.png" alt="Talma, líder en servicios aeroportuarios">
-        <div class="powerapps-brand"><img src="assets/img/power-apps-logo.png" alt="Microsoft Power Apps"><span>Power Apps</span></div>
       </div>
       <nav class="primary-nav" aria-label="Navegación principal">
         <a href="#resumen" data-nav="resumen"><i class="fa-solid fa-grid-2"></i><span>Resumen</span></a>
@@ -78,7 +78,7 @@
           <div class="view-toolbar">
             <div><span class="section-kicker">Fuente operativa</span><h2>Registro maestro</h2><p><strong id="totalRecords">0</strong> registros sincronizados con Firebase.</p></div>
             <div class="toolbar-actions">
-              <button class="command-button secondary notes-review-button" id="btnRevisarNotas" onclick="revisarNotas()"><img src="assets/img/power-apps-logo.png" alt="">Revisar notas</button>
+              <button class="command-button secondary" id="btnRevisarNotas" onclick="revisarNotas()"><i class="fa-solid fa-graduation-cap"></i>Estado de notas</button>
               <button class="command-button secondary" onclick="exportarExcel()"><i class="fa-solid fa-file-excel"></i>Exportar</button>
               <button class="command-button secondary" data-bs-toggle="modal" data-bs-target="#modalCargaMasiva"><i class="fa-solid fa-file-arrow-up"></i>Importar</button>
             </div>
@@ -122,7 +122,7 @@
   <div id="entityOverlay" class="drawer-overlay"><aside class="entity-drawer"><div id="entityContent"></div></aside></div>
   <div id="cargaResultado"></div>
 
-  <div class="modal fade" id="modalRevisionNotas" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Reporte Aprende Talma</span><h5>Revisión automática de notas</h5></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="notasEstado" class="notes-status" aria-live="polite">Preparando revisión...</div><div id="notasContenido" class="d-none"><p class="notes-explanation">La revisión se ejecuta diariamente desde GitHub, actualiza Firebase por cédula y conserva los registros históricos.</p><div class="notes-metrics"><span>Revisados<strong id="notasRevisados">0</strong></span><span>Actualizados<strong id="notasCambios">0</strong></span><span>Ya coincidían<strong id="notasIguales">0</strong></span><span>Sin coincidencia<strong id="notasNoEncontrados">0</strong></span></div><div id="notasFuenteDetalle" class="notes-source"></div><div class="notes-course-map"><div><span>Curso en esta plataforma</span><strong>Básico inicial y sus variaciones</strong><small>Se compara con Mercancías Peligrosas Básico 8 Horas · Inicial 2026V2</small></div><div><span>Curso en esta plataforma</span><strong>Básico repaso o recurrente y sus variaciones</strong><small>Se compara con Mercancías Peligrosas Básico 4 Horas · Recurrente 2026V2</small></div></div></div></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button class="command-button primary" onclick="revisarNotas()"><i class="fa-solid fa-rotate"></i>Actualizar estado</button></div></div></div></div>
+  <div class="modal fade" id="modalRevisionNotas" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Reporte Aprende Talma</span><h5>Estado de calificaciones</h5></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="notasEstado" class="notes-status" aria-live="polite">Consultando revisión...</div><div id="notasContenido" class="d-none"><p class="notes-explanation">El servidor de esta aplicación descarga el reporte cada hora, cruza cédula, nombre y tipo de curso, y guarda la calificación oficial sin decimales.</p><div class="notes-metrics"><span>Revisados<strong id="notasRevisados">0</strong></span><span>Notas cargadas<strong id="notasCargadas">0</strong></span><span>Notas corregidas<strong id="notasCorregidas">0</strong></span><span>Ya correctas<strong id="notasIguales">0</strong></span><span>Sin coincidencia<strong id="notasNoEncontrados">0</strong></span></div><div id="notasFuenteDetalle" class="notes-source"></div><div class="notes-course-map"><div><span>Curso en esta plataforma</span><strong>Básico inicial y sus variaciones</strong><small>Se compara con Mercancías Peligrosas Básico 8 Horas · Inicial 2026V2</small></div><div><span>Curso en esta plataforma</span><strong>Básico repaso o recurrente y sus variaciones</strong><small>Se compara con Mercancías Peligrosas Básico 4 Horas · Recurrente 2026V2</small></div></div></div></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button class="command-button secondary" onclick="revisarNotas()"><i class="fa-solid fa-rotate"></i>Actualizar estado</button><button class="command-button primary" onclick="sincronizarNotasAhora()"><i class="fa-solid fa-cloud-arrow-down"></i>Descargar ahora</button></div></div></div></div>
 
   <div class="modal fade" id="modalRegistro" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Gestión de datos</span><h5 class="modal-title" id="modalTitle">Registro de capacitación</h5></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="formErrors" class="form-errors"></div><form id="registroForm"><input type="hidden" id="recordDocId"><div class="form-grid">
     <label>ID / Cédula *<input id="field_ID" class="form-control" required></label><label class="span-2">Nombres y apellidos *<input id="field_NOMBRES" class="form-control" required></label><label>Programa<input id="field_PROGRAMA" class="form-control"></label>

@@ -12,7 +12,7 @@ import {
 import { store } from "./store.js";
 import { escapeHtml } from "./ui.js";
 import {
-  normalizarCedula, clasificarRegistro, conTrazas, clavePersonaCurso, claveExactaPersonaCursoFecha,
+  normalizarCedula, clasificarRegistro, conTrazas, claveCitacion,
 } from "./capacitacion.js";
 import { normalizarNumeroCertificado } from "./certificados-core.js";
 import {
@@ -204,6 +204,10 @@ function filaCelda(item, key) {
     case "ASISTIO": {
       const esSi = (item.ASISTIO || "SÍ").toUpperCase() !== "NO";
       return `<td><span class="hz-pill ${esSi ? "si" : "no"}"><span class="hz-dot"></span>${esSi ? "SÍ" : "NO"}</span></td>`;
+    }
+    case "NOTA": {
+      const verificada = item.NOTA_ORIGEN === "Reporte Aprende Talma";
+      return `<td><span class="grade-value">${v || "—"}</span>${verificada ? '<i class="fa-solid fa-circle-check grade-verified" title="Verificada con el reporte de Aprende Talma" aria-label="Nota verificada"></i>' : ""}</td>`;
     }
     case "OBSERVACION": return `<td title="${v}">${v || "—"}</td>`;
     default: return `<td>${v || "—"}</td>`;
@@ -519,14 +523,14 @@ window.procesarCargaMasiva = function () {
         await cederAlNavegador();
       }
 
-      // 2) Detectar DUPLICADOS INTERNOS del archivo (misma cédula+curso y
-      //    misma fecha dentro del mismo Excel). Solo la primera ocurrencia
+      // 2) Detectar DUPLICADOS INTERNOS del archivo (misma citación completa).
+      //    Fechas, grupos u horarios diferentes se conservan. Solo la primera
       //    se toma en cuenta; las demás se marcan como "duplicado interno".
       const vistos = new Set();
       filas.forEach(f => {
         if (f.erroresFinal.length > 0) { f.duplicadoInterno = false; return; }
-        const clave = claveExactaPersonaCursoFecha(f.rec.ID, f.rec.CURSO, f.rec.FECHA);
-        if (vistos.has(clave)) { f.duplicadoInterno = true; f.erroresFinal.push("Duplicado interno del archivo (misma cédula, curso y fecha)"); }
+        const clave = claveCitacion(f.rec);
+        if (vistos.has(clave)) { f.duplicadoInterno = true; f.erroresFinal.push("Duplicado interno del archivo (misma citación completa)"); }
         else vistos.add(clave);
       });
 
@@ -721,28 +725,10 @@ window.confirmarSubidaValidos = async function () {
   );
   if (clientes.length === 0) return;
 
-  // Los "nuevos" no deben pisar un registro por error de orden: si dos filas
-  // del mismo Excel se solapan (misma persona+curso vigente), la última
-  // ocurrencia se convierte en "actualizar" sobre lo que se va a crear.
-  const agrupados = new Map();
-  clientes.forEach(f => {
-    const clave = clavePersonaCurso(f.rec.ID, f.rec.CURSO);
-    if (!agrupados.has(clave)) agrupados.set(clave, []);
-    agrupados.get(clave).push(f);
-  });
-  const operaciones = [];
-  agrupados.forEach(grupo => {
-    grupo.forEach((f, i) => {
-      if (i === 0) {
-        operaciones.push({ tipo: f.accion === "nuevo" ? "crear" : "actualizar", f });
-      } else {
-        // Misma persona+curso en el archivo → solo la última fila aplica.
-        operaciones.push({ tipo: f.accion === "nuevo" ? "crear" : "actualizar", f, noop: true });
-      }
-    });
-  });
-  const reales = operaciones.filter(o => !o.noop);
-  const operacionesPersistibles = reales.map(op => {
+  // Cada fecha es una citación independiente. Una misma cédula puede crear
+  // varias filas del mismo curso cuando corresponden a días diferentes.
+  const operaciones = clientes.map(f => ({ tipo: f.accion === "nuevo" ? "crear" : "actualizar", f }));
+  const operacionesPersistibles = operaciones.map(op => {
     const { f } = op;
     const certificadoExistente = op.tipo === "actualizar" ? {
       CERT_NUMERO: f.objetivo?.CERT_NUMERO || f.rec.CERT_NUMERO || "",

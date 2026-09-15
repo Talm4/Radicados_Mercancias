@@ -119,6 +119,7 @@ assert.equal(lotesImportacion.length, 12);
 assert.ok(lotesImportacion.every(lote => lote.length <= 450));
 assert.equal(idDeterministaRegistro(records[0]), idDeterministaRegistro({ ...records[0] }));
 assert.notEqual(idDeterministaRegistro(records[0]), idDeterministaRegistro(records[1]));
+assert.notEqual(idDeterministaRegistro(records[0]), idDeterministaRegistro({ ...records[0], GRUPO: "OTRO GRUPO" }));
 
 
 // Umbrales deliberadamente holgados: detectan regresiones algorítmicas

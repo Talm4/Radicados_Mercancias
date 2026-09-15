@@ -37,8 +37,6 @@ body { background: var(--canvas); }
   border-bottom: 1px solid var(--border-subtle);
 }
 .brand-logo { display: block; width: 168px; height: 58px; object-fit: cover; object-position: center 51%; }
-.powerapps-brand { display: flex; align-items: center; gap: 8px; color: #742774; font-size: .76rem; font-weight: 700; }
-.powerapps-brand img { width: 25px; height: 25px; object-fit: contain; }
 .primary-nav { gap: 2px; margin-top: 16px; }
 .primary-nav a {
   min-height: 44px;
@@ -69,7 +67,6 @@ body { background: var(--canvas); }
 .command-button { min-height: 38px; padding: 8px 14px; font-size: .84rem; }
 .command-button.primary { background: var(--navy-900); }
 .command-button.primary:hover { background: #061f59; }
-.notes-review-button img { width: 19px; height: 19px; object-fit: contain; }
 .filter-command { top: 70px; background: #fff; backdrop-filter: none; }
 .filter-shell { padding: 10px 26px 8px; }
 .filter-row .form-control, .filter-row .form-select { height: 38px; border-radius: 3px; font-size: .84rem; }
@@ -289,9 +286,10 @@ body { background: var(--canvas); }
 .notes-status.warning { border-color: #e2c46e; background: #fff8e5; color: #6d4f00; }
 .notes-status.error { border-color: #e5a8a8; background: #fff2f2; color: #a4262c; }
 .notes-explanation { margin: 14px 0 10px; color: var(--text-muted); font-size: .88rem; }
-.notes-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.notes-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .notes-metrics span { padding: 11px 12px; border: 1px solid var(--border-subtle); background: #fff; color: var(--text-muted); font-size: .76rem; }
 .notes-metrics strong { display: block; margin-top: 2px; color: var(--navy-900); font-size: 1.25rem; }
+.grade-verified { color: #16866a; margin-left: 6px; font-size: .78rem; }
 .notes-source { padding: 9px 1px; color: var(--text-muted); font-size: .78rem; }
 .notes-course-map { display: grid; gap: 8px; margin-top: 8px; }
 .notes-course-map > div { display: grid; gap: 3px; padding: 12px; border-left: 3px solid #742774; background: #f8f4f9; }

@@ -1,6 +1,9 @@
 import unittest
 
-from scripts.actualizar_notas import normalize, normalize_id, platform_course_type, rounded_grade, TARGETS
+from scripts.actualizar_notas import (
+    TARGETS, encode_firestore_value, names_compatible, normalize,
+    normalize_id, platform_course_type, rounded_grade,
+)
 
 
 class NotesRulesTest(unittest.TestCase):
@@ -21,6 +24,15 @@ class NotesRulesTest(unittest.TestCase):
         self.assertEqual(rounded_grade("93.4"), 93)
         self.assertIsNone(rounded_grade("sin nota"))
         self.assertIsNone(rounded_grade("101"))
+
+    def test_identity_and_firestore_encoding(self):
+        self.assertTrue(names_compatible("ALEXANDER ESCOBAR PAJARO", "PAJARO ALEXANDER ESCOBAR"))
+        self.assertFalse(names_compatible("ALEXANDER ESCOBAR", "MARIA PEREZ"))
+        self.assertEqual(encode_firestore_value(81), {"integerValue": "81"})
+        self.assertEqual(
+            encode_firestore_value({"inicial": "curso"}),
+            {"mapValue": {"fields": {"inicial": {"stringValue": "curso"}}}},
+        )
 
 
 if __name__ == "__main__":

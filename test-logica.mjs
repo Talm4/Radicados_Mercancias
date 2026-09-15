@@ -45,11 +45,11 @@ const nuevo = clasificarRegistro(
   { ID: "999999", NOMBRES: "Nueva Persona", CURSO: "Curso HSEQ", FECHA: "2026-09-01", ASISTIO: "SÍ" }, existentes, hoy);
 check("Caso 1 (nuevo) → crear", nuevo.accion === "nuevo", `=> ${nuevo.accion}`);
 
-// Caso 2 — misma cédula+curso dentro de vigencia → actualizar
+// Caso 2 — misma cédula+curso en otra fecha → crear otra citación
 const dentro = clasificarRegistro(
   { ID: "1036961650", NOMBRES: "Cristian Bustamante", CURSO: "Mercancías Peligrosas", FECHA: "2026-08-15", ASISTIO: "SÍ" }, existentes, hoy);
-check("Caso 2 (dentro vigencia) → actualizar", dentro.accion === "actualizar", `=> ${dentro.accion}`);
-check("Caso 2 → objetivo correcto", dentro.objetivo && dentro.objetivo._docId === "a1");
+check("Caso 2 (otra fecha) → crear", dentro.accion === "nuevo", `=> ${dentro.accion}`);
+check("Caso 2 conserva la citación anterior", dentro.objetivo === null);
 
 // Caso 2b — duplicado exacto (misma fecha) → sin cambios
 const exacto = clasificarRegistro(
@@ -61,7 +61,7 @@ const cambiaBase = clasificarRegistro(
   { ID: "1036961650", NOMBRES: "Cristian Bustamante", CURSO: "Mercancías Peligrosas", FECHA: "2026-08-10", ASISTIO: "SÍ", BASE: "BOG", GRUPO: "GRUPO R-AGO-02" }, existentes, hoy);
 check("Caso 2c (misma fecha, cambia base) → actualizar", cambiaBase.accion === "actualizar", `=> ${cambiaBase.accion}`);
 
-// Caso 3 — misma persona+curso a 24 meses exactos (2028 vs 2026) → NUEVA recurrencia
+// Caso 3 — fecha distante también permanece como otro registro
 const vencido = clasificarRegistro(
   { ID: "1036961650", NOMBRES: "Cristian Bustamante", CURSO: "Mercancías Peligrosas", FECHA: "2028-08-10", ASISTIO: "SÍ", BASE: "MDE" }, existentes, hoy);
 check("Caso 3 (distancia de 24 meses) → nuevo", vencido.accion === "nuevo", `=> ${vencido.accion} / ${vencido.motivo}`);
