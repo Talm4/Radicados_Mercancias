@@ -76,6 +76,19 @@ export function normKey(str) {
   return stripAccents(str).trim().toUpperCase().replace(/\s+/g, " ");
 }
 
+// La plataforma usa dos nombres canónicos para evitar que tildes,
+// mayúsculas o sinónimos creen opciones de filtro distintas.
+export function normalizarNombreCurso(value) {
+  const original = safeStr(value).trim().replace(/\s+/g, " ");
+  const key = normKey(original);
+  if (!key) return "";
+  if (key.includes("BASICO") && key.includes("INICIAL")) return "Básico Inicial";
+  if (key.includes("BASICO") && (key.includes("REPASO") || key.includes("RECURRENTE") || key.includes("RECURRENCIA"))) {
+    return "Básico Repaso";
+  }
+  return original;
+}
+
 /* ---------------------------- Fechas ---------------------------- */
 // Acepta "8/06/2026", "2026-06-08", fechas de Excel (número serial) y
 // devuelve {iso, display, valid}
@@ -213,6 +226,8 @@ export function normalizarFilaExcel(rowRaw, mapaEncabezados) {
       const f = parseFechaFlexible(valor);
       rec.FECHA = f.empty ? "" : (f.valid ? f.iso : String(valor));
       rec._fechaValida = f.valid;
+    } else if (campo === "CURSO") {
+      rec.CURSO = normalizarNombreCurso(valor);
     } else if (campo === "ASISTIO") {
       const v = String(valor).trim().toUpperCase();
       rec.ASISTIO = v === "NO" ? "NO" : (v === "" ? "SÍ" : "SÍ");
@@ -257,6 +272,8 @@ export function normalizarRegistroFirestore(raw, campos) {
     if (campo === "FECHA") {
       const f = parseFechaFlexible(raw.FECHA);
       out.FECHA = f.empty ? "" : (f.valid ? f.iso : safeStr(raw.FECHA));
+    } else if (campo === "CURSO") {
+      out.CURSO = normalizarNombreCurso(raw.CURSO);
     } else {
       out[campo] = safeStr(raw[campo]);
     }

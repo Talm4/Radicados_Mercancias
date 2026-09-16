@@ -72,13 +72,17 @@
               <div class="table-responsive"><table class="enterprise-table attendance-table"><thead><tr><th>Colaborador</th><th>ID</th><th>Fecha</th><th>Base</th><th>Grupo</th><th>Instructor</th></tr></thead><tbody id="dashAbsences"></tbody></table></div>
             </article>
           </div>
+          <article class="surface base-dashboard">
+            <div class="surface-head"><div><span class="section-kicker">Cobertura operativa</span><h3>Asistencia por base</h3></div><span class="context-pill">Comparación rápida</span></div>
+            <div id="dashBases" class="base-attendance-grid"></div>
+          </article>
         </section>
 
         <section id="view-registros" class="tdc-view">
           <div class="view-toolbar">
             <div><span class="section-kicker">Fuente operativa</span><h2>Registro maestro</h2><p><strong id="totalRecords">0</strong> registros sincronizados con Firebase.</p></div>
             <div class="toolbar-actions">
-              <button class="command-button secondary" id="btnRevisarNotas" onclick="revisarNotas()"><i class="fa-solid fa-graduation-cap"></i>Estado de notas</button>
+              <button class="command-button secondary" id="btnRevisarNotas" onclick="revisarNotas()"><i class="fa-solid fa-graduation-cap"></i>Actualizar notas</button>
               <button class="command-button secondary" onclick="exportarExcel()"><i class="fa-solid fa-file-excel"></i>Exportar</button>
               <button class="command-button secondary" data-bs-toggle="modal" data-bs-target="#modalCargaMasiva"><i class="fa-solid fa-file-arrow-up"></i>Importar</button>
             </div>
@@ -100,18 +104,20 @@
         </section>
 
         <section id="view-personas" class="tdc-view">
-          <div class="view-toolbar"><div><span class="section-kicker">Colaboradores</span><h2>Personas</h2><p>Consulta rápida del historial de asistencia por colaborador.</p></div><div id="personKpis" class="compact-kpis"></div></div>
+          <div class="view-toolbar"><div><span class="section-kicker">Agenda de hoy</span><h2>Personas</h2><p>Quién debe asistir hoy y el historial individual de capacitación.</p></div><div id="personKpis" class="compact-kpis"></div></div>
+          <article class="surface today-people"><div class="surface-head"><div><span class="section-kicker">Programación diaria</span><h3>Personas con curso hoy</h3></div><span id="personTodayCount" class="context-pill">0 programadas</span></div><div id="personToday" class="today-people-grid"></div></article>
+          <div class="section-divider-title"><span>Directorio e historial</span></div>
           <div class="surface data-surface"><div class="table-responsive"><table class="enterprise-table"><thead><tr><th>Colaborador</th><th>ID</th><th>Base</th><th>Cursos</th><th>Asistencia</th><th>Última actividad</th></tr></thead><tbody id="personasTbody"></tbody></table></div><div class="simple-pager" id="personPager"></div></div>
         </section>
 
         <section id="view-cursos" class="tdc-view">
-          <div class="view-toolbar"><div><span class="section-kicker">Cursos</span><h2>Cursos</h2><p>Personas, grupos y asistencia por curso.</p></div></div>
-          <div id="courseCards" class="entity-grid"></div>
+          <div class="view-toolbar"><div><span class="section-kicker">Comparación formativa</span><h2>Cursos</h2><p>Compara Inicial y Repaso sin duplicados por tildes o variaciones de nombre.</p></div><div id="courseKpis" class="compact-kpis"></div></div>
+          <div id="courseCards" class="course-comparison"></div>
         </section>
 
         <section id="view-grupos" class="tdc-view">
-          <div class="view-toolbar"><div><span class="section-kicker">Ejecución</span><h2>Grupos</h2><p>Seguimiento de cohortes, participación y responsables.</p></div></div>
-          <div id="groupCards" class="entity-grid"></div>
+          <div class="view-toolbar"><div><span class="section-kicker">Agenda operativa</span><h2>Grupos</h2><p>Programación de hoy, próximas jornadas e historial de grupos.</p></div><div id="groupKpis" class="compact-kpis"></div></div>
+          <div id="groupCards" class="group-agenda"></div>
         </section>
 
       </div>
@@ -122,7 +128,7 @@
   <div id="entityOverlay" class="drawer-overlay"><aside class="entity-drawer"><div id="entityContent"></div></aside></div>
   <div id="cargaResultado"></div>
 
-  <div class="modal fade" id="modalRevisionNotas" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Reporte Aprende Talma</span><h5>Estado de calificaciones</h5></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="notasEstado" class="notes-status" aria-live="polite">Consultando revisión...</div><div id="notasContenido" class="d-none"><p class="notes-explanation">El servidor de esta aplicación descarga el reporte cada hora, cruza cédula, nombre y tipo de curso, y guarda la calificación oficial sin decimales.</p><div class="notes-metrics"><span>Revisados<strong id="notasRevisados">0</strong></span><span>Notas cargadas<strong id="notasCargadas">0</strong></span><span>Notas corregidas<strong id="notasCorregidas">0</strong></span><span>Ya correctas<strong id="notasIguales">0</strong></span><span>Sin coincidencia<strong id="notasNoEncontrados">0</strong></span></div><div id="notasFuenteDetalle" class="notes-source"></div><div class="notes-course-map"><div><span>Curso en esta plataforma</span><strong>Básico inicial y sus variaciones</strong><small>Se compara con Mercancías Peligrosas Básico 8 Horas · Inicial 2026V2</small></div><div><span>Curso en esta plataforma</span><strong>Básico repaso o recurrente y sus variaciones</strong><small>Se compara con Mercancías Peligrosas Básico 4 Horas · Recurrente 2026V2</small></div></div></div></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button class="command-button secondary" onclick="revisarNotas()"><i class="fa-solid fa-rotate"></i>Actualizar estado</button><button class="command-button primary" onclick="sincronizarNotasAhora()"><i class="fa-solid fa-cloud-arrow-down"></i>Descargar ahora</button></div></div></div></div>
+  <div class="modal fade" id="modalRevisionNotas" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Reporte Aprende Talma</span><h5>Actualizar calificaciones</h5></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="notasEstado" class="notes-status" aria-live="polite">Inicia la actualización manual.</div><div id="notasContenido"><p class="notes-explanation">La opción segura ejecuta todo dentro del repositorio: descarga el reporte en un runner temporal, lo valida y actualiza únicamente las notas. El Excel no se publica ni se guarda en GitHub.</p><div class="repository-update-card"><div><strong>Actualización desde GitHub</strong><span>En la página que se abre, pulsa “Run workflow”. No existe programación horaria.</span></div><button class="command-button primary" type="button" onclick="abrirActualizacionRepositorio()"><i class="fa-brands fa-github"></i>Abrir actualización manual</button></div><details class="local-report-fallback"><summary>Alternativa local</summary><p>Si no puedes ejecutar GitHub Actions, descarga y selecciona el archivo. La validación comienza inmediatamente y ahora admite la estructura real del reporte.</p><div class="notes-steps"><span><b>1</b> Descarga el reporte actual</span><span><b>2</b> Selecciona el archivo descargado</span><span><b>3</b> Se valida automáticamente</span></div><div class="notes-file-row"><button class="command-button secondary" type="button" onclick="descargarReporteNotas()"><i class="fa-solid fa-download"></i>Descargar reporte</button><input type="file" id="reportFileInput" class="form-control" accept=".xlsx"></div></details><div class="import-progress notes-progress"><div class="import-progress-track"><span id="notasProgressBar"></span></div></div><div id="notasResultado"></div><div id="notasUltimaRevision" class="notes-source"></div><div class="notes-course-map"><div><span>Nombre estándar</span><strong>Básico Inicial</strong><small>Reporte: Mercancías Peligrosas Básico 8 Horas · Inicial 2026V2</small></div><div><span>Nombre estándar</span><strong>Básico Repaso</strong><small>Reporte: Mercancías Peligrosas Básico 4 Horas · Recurrente 2026V2</small></div></div></div></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button class="command-button secondary" id="btnProcesarNotas" onclick="procesarReporteNotas()"><i class="fa-solid fa-rotate"></i>Reprocesar archivo local</button></div></div></div></div>
 
   <div class="modal fade" id="modalRegistro" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Gestión de datos</span><h5 class="modal-title" id="modalTitle">Registro de capacitación</h5></div><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="formErrors" class="form-errors"></div><form id="registroForm"><input type="hidden" id="recordDocId"><div class="form-grid">
     <label>ID / Cédula *<input id="field_ID" class="form-control" required></label><label class="span-2">Nombres y apellidos *<input id="field_NOMBRES" class="form-control" required></label><label>Programa<input id="field_PROGRAMA" class="form-control"></label>
@@ -153,6 +159,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="assets/js/theme.js"></script>
-  <script type="module" src="assets/js/app.js?v=6"></script>
+  <script type="module" src="assets/js/app.js?v=8"></script>
 </body>
 </html>

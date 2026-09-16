@@ -1,97 +1,58 @@
-# Talma · Control de asistencia
+# Talma Mercancías Dashboard V2
 
-Aplicación web para validar la asistencia al curso de Radicación de Mercancías Peligrosas. Mantiene Firebase, CRUD, importación/exportación, filtros, perfiles y certificados.
+Aplicación estática para GitHub Pages conectada con Firebase. No requiere `127.0.0.1`, PowerShell, un computador encendido ni un servidor local.
 
-## Uso
+## Actualización manual de datos y notas
 
-En Windows ejecuta:
+El botón **Actualizar** inicia dos acciones:
 
-```powershell
-.\INICIAR-PLATAFORMA.ps1
-```
+1. refresca la conexión en tiempo real con Firebase;
+2. abre el workflow manual del repositorio para actualizar las notas.
 
-Luego abre `http://127.0.0.1:4173/index.html`. Este servidor forma parte del proyecto y mantiene activa la descarga horaria. Un servidor estático común muestra la interfaz, pero no puede ejecutar la descarga automática.
+El workflow `.github/workflows/actualizar-notas-manual.yml` solo contiene `workflow_dispatch`: no tiene `schedule`, cron ni ejecución horaria. En GitHub pulsa **Run workflow**. El runner descarga el Excel en una carpeta temporal, valida su estructura, hace el cruce y actualiza Firestore. El reporte no se guarda ni se publica en el repositorio porque contiene datos personales.
 
-## Navegación
+## Configuración única
 
-- **Resumen:** total de registros, personas que asistieron, personas que no asistieron y lista de inasistencias.
-- **Registros:** tabla paginada con búsqueda, filtros, CRUD, acciones masivas e importación/exportación.
-- **Personas:** asistencia consolidada y perfil lateral por colaborador.
-- **Cursos:** personas, grupos y asistencia por curso.
-- **Grupos:** participantes y asistencia por grupo.
+En **Settings → Secrets and variables → Actions** crea `FIREBASE_SERVICE_ACCOUNT_B64` con el JSON Base64 de una cuenta de servicio del proyecto `talma-datacenter`. La credencial no debe agregarse a ningún archivo del repositorio.
 
-## Certificados
+Como alternativa, el asistente conserva el procesamiento local. Al seleccionar el Excel, la validación comienza automáticamente. Este lector procesa el XML progresivamente porque la hoja real no incluye `<dimension>` y se expande a más de 700 MB.
 
-El perfil permite ver, configurar, descargar o guardar en Firebase el certificado cuando la persona asistió y obtuvo una nota superior a 80. Con inasistencia, nota igual o inferior a 80, o una nota no válida, queda bloqueado en la interfaz y en la lógica de generación.
+Solo se conservan los registros de:
 
-El código se asigna una sola vez por colaborador mediante una transacción de Firestore. Los valores existentes en `CERT_NUMERO` se conservan durante la migración; quienes todavía no tengan código reciben automáticamente el siguiente `CI-#####` disponible. El PDF añade el prefijo visual `N°:`.
+- Mercancías Peligrosas Básico 8 Horas · Inicial 2026V2;
+- Mercancías Peligrosas Básico 4 Horas · Recurrente 2026V2.
 
-Las licencias IET se completan automáticamente para Álvaro López (`94314461`), Juan Arias (`80022447`) y Adriana Vanegas (`31172210`).
+El cruce usa cédula normalizada, familia de curso y compatibilidad del nombre. Cuando una persona tiene varios registros del mismo tipo se actualiza el más reciente cuyo nombre coincida. El historial no se elimina. Las escrituras por lotes modifican exclusivamente `NOTA` y la redondean sin decimales.
 
-El PDF conserva las fuentes Calibri y Calibri Bold incrustadas en `assets/pdf/PLANTILLA-CERTIFICADO.pdf`. Los campos personalizados se guardan en el registro de `capacitaciones`; los PDF enviados a la nube se almacenan en Firebase Storage.
+## Cursos estandarizados
 
-## Arquitectura
+La aplicación presenta y agrupa todos los derivados como:
 
-```text
-Firestore (un listener)
-  → normalización
-  → índices por dimensión
-  → filtros cacheados
-  → agregación de asistencia
-  → tablero y tablas paginadas
+- `Básico Inicial`;
+- `Básico Repaso`.
 
-Servidor local
-  → descarga privada de reporteglobal.xlsx cada 60 minutos
-  → lectura en streaming
-  → cruce por cédula y familia de curso
-  → actualización por lotes en Firestore
-```
+Se ignoran diferencias de tildes, mayúsculas y las variantes Repaso, Recurrente o Recurrencia. La normalización se aplica a datos históricos en memoria y a todo registro creado, editado o importado.
 
-## Importaciones de más de 5.000 filas
+## Vistas operativas
 
-La vista previa está paginada y Firebase recibe lotes de 450 operaciones con avance visible. El navegador guarda un punto de recuperación después de cada lote; si se corta la conexión o se cierra la página, al regresar aparecerá la opción **Reanudar**. Los lotes repetidos son idempotentes y no crean copias del mismo registro.
+- **Resumen:** asistencia general, inasistencias y comparación rápida por base.
+- **Registros:** tabla maestra paginada, filtros, CRUD, importación y exportación.
+- **Personas:** agenda de colaboradores con curso hoy y directorio histórico.
+- **Cursos:** comparación de Inicial y Repaso por personas, grupos, bases y asistencia.
+- **Grupos:** agenda separada en Hoy, Próximos e Historial.
 
-Se admiten archivos Excel o CSV de hasta 25 MB. Conviene mantener una fila de encabezados reconocible y las columnas ID/Cédula y Nombres; las columnas adicionales se ignoran.
+## Seguridad
 
-La cédula no se considera un registro único. Una persona puede aparecer varias veces en el mismo curso. Solo se actualiza una fila existente cuando coinciden cédula, curso, fecha, grupo, hora y salón; cualquier citación diferente se crea como otro registro y permanece visible en el historial.
+- La cuenta de servicio se recibe únicamente mediante el Secret `FIREBASE_SERVICE_ACCOUNT_B64`.
+- El reporte solo existe temporalmente en el runner y se elimina automáticamente.
+- La alternativa local permanece disponible y no sube el Excel a ningún servidor adicional.
+- Si la lectura o el cruce falla, no se inicia ninguna escritura de notas.
 
-## Revisión automática de notas
-
-La automatización compara Firebase con el reporte de Aprende Talma. La coincidencia usa la cédula y el tipo de curso, sin distinguir tildes ni mayúsculas:
-
-- `Básico inicial` y sus variaciones usan el curso LMS de 8 horas, Inicial 2026V2.
-- `Básico repaso`, `Básico recurrente` y sus variaciones usan el curso LMS de 4 horas, Recurrente 2026V2.
-
-El proceso toma el registro más reciente por persona y tipo de curso, redondea la nota al entero más cercano y actualiza Firebase. Distingue notas vacías que fueron cargadas, notas digitadas que fueron corregidas y notas que ya coincidían. Los registros sin coincidencia permanecen intactos.
-
-La coincidencia principal usa la cédula. Antes de escribir, también compara los componentes del nombre; una diferencia importante se informa como conflicto de identidad y bloquea esa actualización. Cada nota válida queda marcada con `NOTA_ORIGEN`, `NOTA_FECHA_REPORTE` y `NOTA_VERIFICADA_EN`; la tabla muestra un visto verde junto a las notas verificadas.
-
-El archivo completo del LMS pesa aproximadamente 55 MB y el servidor de Aprende no permite descargarlo directamente desde JavaScript por CORS. `servidor.py` resuelve esto dentro del código de la aplicación: descarga el archivo al iniciar si no existe y vuelve a descargarlo cuando transcurren 60 minutos. La copia se guarda en `.cache/reporteglobal.xlsx`, fuera de los recursos públicos y excluida de Git.
-
-Para escribir las notas en Firestore, guarda localmente la credencial como `firebase-service-account.json` junto a `INICIAR-PLATAFORMA.ps1`. El servidor bloquea el acceso web a ese archivo y `.gitignore` evita que se suba al repositorio. Sin esa credencial, el sistema descarga, almacena y valida el Excel, pero no modifica Firebase.
-
-El botón **Estado de notas** consulta el proceso local. **Descargar ahora** permite adelantar la siguiente revisión sin esperar una hora.
-
-También se conserva una ejecución única independiente:
-
-```powershell
-.\SINCRONIZAR-NOTAS.ps1
-```
-
-La escritura usa la API REST de Firestore autenticada por OAuth. No usa GitHub Actions, Firebase Functions, Cloud Scheduler ni cambia el plan de Firebase.
-
-La auditoría local de solo lectura se puede repetir sin modificar Firebase:
-
-```bash
-python scripts/actualizar_notas.py --source ../reporteglobal.xlsx --audit-public
-```
-
-## Pruebas
+## Validación
 
 ```bash
 node test-logica.mjs
 node test-v2.mjs
-python test-notas.py
 ```
 
-Consulta `CAMBIOS-V2.md` para ver el detalle técnico y las mediciones de rendimiento.
+Para publicar, sube el contenido de esta carpeta a la rama configurada para GitHub Pages.

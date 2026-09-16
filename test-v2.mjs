@@ -10,7 +10,8 @@ import {
   puedeCertificar,
   secuenciaCertificado,
 } from "./assets/js/certificados-core.js";
-import { mapearEncabezados, normalizarFilaExcel } from "./assets/js/utils.js";
+import { mapearEncabezados, normalizarFilaExcel, normalizarNombreCurso } from "./assets/js/utils.js";
+import { nombresCompatibles, planificarActualizacionesNotas, tipoCursoPlataforma } from "./assets/js/notas-core.js";
 import {
   TAMANO_LOTE_FIRESTORE, categorizarFilasImportacion, idDeterministaRegistro,
   lotesDe, paginaPrevia,
@@ -102,6 +103,21 @@ assert.equal(secuenciaCertificado("CI-15162"), 15162);
 const migrationHeaders = mapearEncabezados(["Cédula", "Nombres y apellidos", "N° Certificado"]);
 const migrated = normalizarFilaExcel({ "Cédula": "1047446658", "Nombres y apellidos": "Alexander Escobar", "N° Certificado": "CI-15161" }, migrationHeaders);
 assert.equal(migrated.CERT_NUMERO, "CI-15161");
+assert.equal(normalizarNombreCurso("BASICO inicial"), "Básico Inicial");
+assert.equal(normalizarNombreCurso("Básico Recurrente"), "Básico Repaso");
+assert.equal(normalizarNombreCurso("básico repaso"), "Básico Repaso");
+assert.equal(tipoCursoPlataforma("Mercancías Peligrosas BÁSICO INICIAL"), "inicial");
+assert.equal(tipoCursoPlataforma("Básico recurrencia"), "recurrente");
+assert.equal(nombresCompatibles("GERALDINE ROJAS GARCIA", "Geraldine Rojas García"), true);
+const planNotas = planificarActualizacionesNotas([
+  { _docId: "viejo", ID: "1.047.489.195", NOMBRES: "Geraldine Rojas Garcia", CURSO: "Básico repaso", FECHA: "2025-01-01", NOTA: "70" },
+  { _docId: "reciente", ID: "1047489195", NOMBRES: "GERALDINE ROJAS GARCÍA", CURSO: "BÁSICO RECURRENTE", FECHA: "2026-02-02", NOTA: "75" },
+], [
+  { id: "1047489195", tipo: "recurrente", nombre: "Geraldine Rojas Garcia", nota: 92, fecha: "2026-02-03" },
+]);
+assert.deepEqual(planNotas.actualizaciones.map(item => item.docId), ["reciente"]);
+assert.equal(planNotas.actualizaciones[0].nota, 92);
+assert.equal(planNotas.stats.historialConservado, 1);
 
 const filasImportacion = Array.from({ length: 5207 }, (_, i) => ({
   fila: i + 2,

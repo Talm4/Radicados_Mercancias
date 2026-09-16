@@ -7,7 +7,7 @@ import { db, colRef, CAMPOS } from "./firebase-config.js";
 import { doc, setDoc, addDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import {
   showToast, validarRegistro, mapearEncabezados, normalizarFilaExcel,
-  formatFechaDisplay, formatHoraDisplay, parseFechaFlexible,
+  formatFechaDisplay, formatHoraDisplay, parseFechaFlexible, normalizarNombreCurso,
 } from "./utils.js";
 import { store } from "./store.js";
 import { escapeHtml } from "./ui.js";
@@ -21,6 +21,7 @@ import {
   eliminarTrabajoImportacion, guardarTrabajoImportacion, huellaArchivo,
   idDeterministaRegistro, leerTrabajoPendiente, lotesDe, paginaPrevia,
 } from "./importacion-resiliente.js";
+import { iniciarRevisionNotasManual } from "./notas.js";
 
 let selectedIds = new Set();
 let pendingImport = { filas: [], resumen: null, categorias: null, archivo: null };
@@ -321,6 +322,7 @@ window.guardarRegistro = async function () {
 
   // Normaliza la cédula antes de validar (identificador, no número).
   dataObj.ID = normalizarCedula(dataObj.ID);
+  dataObj.CURSO = normalizarNombreCurso(dataObj.CURSO);
 
   const { valido, errores } = validarRegistro(dataObj);
   limpiarValidacionForm();
@@ -438,6 +440,7 @@ window.aplicarEdicionMasiva = async function () {
     if (!f.valid) { showToast("La fecha ingresada no es válida.", "danger"); return; }
     cambios.FECHA = f.iso;
   }
+  if (Object.hasOwn(cambios, "CURSO")) cambios.CURSO = normalizarNombreCurso(cambios.CURSO);
   try {
     const ids = [...selectedIds];
     for (let i = 0; i < ids.length; i += 450) {
@@ -512,7 +515,7 @@ window.procesarCargaMasiva = function () {
           const rec = normalizarFilaExcel(jsonData[idx], mapa);
           if (!rec.PROGRAMA) rec.PROGRAMA = "Mercancías Peligrosas";
           rec.ID = normalizarCedula(rec.ID);
-          rec.CURSO = String(rec.CURSO || "").trim().replace(/\s+/g, " ");
+          rec.CURSO = normalizarNombreCurso(rec.CURSO);
           const { errores } = validarRegistro(rec);
           const erroresFinal = [...errores];
           if (rec._fechaValida === false) erroresFinal.push("Fecha con formato irreconocible");
@@ -813,6 +816,7 @@ async function ejecutarTrabajoImportacion(trabajo) {
     showToast(`Carga completada: ${creados.toLocaleString("es-CO")} creados y ${actualizados.toLocaleString("es-CO")} actualizados.`, "success");
     modalValidacion.hide();
     mostrarResultadoCarga({ ...trabajo.resumen, creados, actualizados });
+    iniciarRevisionNotasManual({ descargar: false });
     pendingImport = { filas: [], resumen: null, categorias: null, archivo: null };
     activeUploadJob = null;
     document.getElementById("excelFileInput").value = "";

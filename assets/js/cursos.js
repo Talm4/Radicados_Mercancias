@@ -6,13 +6,29 @@ import { store } from "./store.js";
 
 export function renderCursos(s) {
   const cursos = agregarPorCurso(s.filtered).sort((a, b) => b.resumen.registros - a.resumen.registros);
-  document.getElementById("courseCards").innerHTML = cursos.length ? cursos.map(c => `<article class="entity-card" data-open-course-profile="${escapeHtml(c.curso)}"><div><span class="section-kicker">Curso</span><h3>${escapeHtml(c.curso)}</h3><p>${escapeHtml(c.programa || "Programa sin asignar")}</p></div><div class="entity-metrics"><div><strong>${c.resumen.personasUnicas}</strong><span>Personas</span></div><div><strong>${c.resumen.grupos}</strong><span>Grupos</span></div><div><strong>${c.resumen.pctAsistencia}%</strong><span>Asistencia</span></div></div><div class="entity-progress"><div style="width:${c.resumen.pctAsistencia}%"></div></div><div class="entity-foot"><span>${c.resumen.instructores} instructores</span><span>Ver perfil <i class="fa-solid fa-arrow-right"></i></span></div></article>`).join("") : '<div class="surface empty-cell">No hay cursos para este filtro.</div>';
+  const totalPersonas = new Set(s.filtered.map(rec => rec._personKey)).size;
+  document.getElementById("courseKpis").innerHTML = `<div class="compact-kpi"><strong>${cursos.length}</strong><span>Tipos</span></div><div class="compact-kpi"><strong>${totalPersonas}</strong><span>Personas</span></div><div class="compact-kpi"><strong>${s.metrics.summary.pctAsistencia}%</strong><span>Asistencia</span></div>`;
+  const host = document.getElementById("courseCards");
+  host.innerHTML = cursos.length ? cursos.map(c => {
+    const bases = new Set(c.registros.map(r => r.BASE).filter(Boolean)).size;
+    const ultima = c.registros.reduce((max, r) => r.FECHA > max ? r.FECHA : max, "");
+    return `<article class="course-row">
+      <div class="course-row-title"><span class="course-icon"><i class="fa-solid fa-book-open"></i></span><div><span class="section-kicker">Curso estandarizado</span><h3>${escapeHtml(c.curso)}</h3><small>Última actividad ${formatFechaDisplay(ultima)}</small></div></div>
+      <div class="course-row-stats"><span><strong>${c.resumen.personasUnicas}</strong> personas</span><span><strong>${c.resumen.grupos}</strong> grupos</span><span><strong>${bases}</strong> bases</span><span class="${c.resumen.noAsistieron ? "critical-value" : "positive-value"}"><strong>${c.resumen.noAsistieron}</strong> ausencias</span></div>
+      <div class="course-rate"><div><strong>${c.resumen.pctAsistencia}%</strong><span>asistencia</span></div><div class="base-attendance-track"><span style="width:${c.resumen.pctAsistencia}%"></span></div></div>
+      <div class="course-row-actions"><button class="command-button secondary" type="button" data-course-records="${escapeHtml(c.curso)}">Ver registros</button><button class="command-button primary" type="button" data-open-course-profile="${escapeHtml(c.curso)}">Abrir detalle</button></div>
+    </article>`;
+  }).join("") : '<div class="surface empty-cell">No hay cursos para este filtro.</div>';
+  host.onclick = event => {
+    const button = event.target.closest("[data-course-records]");
+    if (!button) return;
+    event.stopPropagation();
+    store.setFiltro("curso", button.dataset.courseRecords);
+    window.location.hash = "#registros";
+  };
 }
 
-export function abrirCurso(nombre) {
-  const records = store.getCourse(nombre);
-  abrirEntityDrawer("Curso", nombre, records, "curso");
-}
+export function abrirCurso(nombre) { abrirEntityDrawer("Curso", nombre, store.getCourse(nombre), "curso"); }
 
 export function abrirEntityDrawer(kind, name, records, type) {
   const overlay = document.getElementById("entityOverlay");
@@ -24,5 +40,4 @@ export function abrirEntityDrawer(kind, name, records, type) {
 }
 
 export function cerrarEntityDrawer() { document.getElementById("entityOverlay")?.classList.remove("open"); }
-
 export function renderCursoDetalle(_s, nombre) { abrirCurso(nombre); }

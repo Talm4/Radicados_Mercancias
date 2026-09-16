@@ -7,7 +7,7 @@
 // defecto es 24 meses. Para agregar un curso con otra vigencia basta
 // añadir una entrada en VIGENCIA_CURSOS.
 // ==========================================================================
-import { safeStr, normKey, parseFechaFlexible } from "./utils.js";
+import { safeStr, normKey, parseFechaFlexible, normalizarNombreCurso } from "./utils.js";
 
 /* ============================ Vigencia configurable ============================ */
 // Meses de vigencia por curso. El valor por defecto (24) aplica a cualquier
@@ -95,12 +95,12 @@ export function cedulaValida(value) {
 // Clave CÉDULA + CURSO en formato normalizado para comparar "misma persona
 // y mismo curso" sin importar tildes, mayúsculas ni espacios.
 export function clavePersonaCurso(id, curso) {
-  return `${normalizarCedula(id)}|${normKey(curso)}`;
+  return `${normalizarCedula(id)}|${normKey(normalizarNombreCurso(curso))}`;
 }
 
 export function claveCitacion(rec) {
   return [
-    normalizarCedula(rec?.ID), normKey(rec?.CURSO), isoFecha(rec?.FECHA),
+    normalizarCedula(rec?.ID), normKey(normalizarNombreCurso(rec?.CURSO)), isoFecha(rec?.FECHA),
     normKey(rec?.GRUPO), normKey(rec?.HORA), normKey(rec?.SALON),
   ].join("|");
 }

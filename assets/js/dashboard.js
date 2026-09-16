@@ -28,6 +28,23 @@ function renderAbsences(metrics) {
     </tr>`).join("") : '<tr><td colspan="6" class="empty-cell attendance-empty"><i class="fa-solid fa-circle-check"></i><strong>No hay inasistencias en esta selección.</strong></td></tr>';
 }
 
+function renderBases(store) {
+  const host = document.getElementById("dashBases");
+  const bases = store.metrics.by.base.filter(base => base.key !== "SIN ASIGNAR").sort((a, b) => b.total - a.total);
+  host.innerHTML = bases.length ? bases.map(base => `
+    <button class="base-attendance-card" type="button" data-dashboard-base="${escapeHtml(base.key)}">
+      <div class="base-attendance-head"><strong>${escapeHtml(base.key)}</strong><span>${base.pctAsistencia}%</span></div>
+      <div class="base-attendance-track"><span style="width:${base.pctAsistencia}%"></span></div>
+      <div class="base-attendance-detail"><span>${base.asistieron} asistieron</span><span>${base.noAsistieron} no asistieron</span><b>${base.total} registros</b></div>
+    </button>`).join("") : '<div class="empty-cell">No hay bases para los filtros actuales.</div>';
+  host.onclick = event => {
+    const button = event.target.closest("[data-dashboard-base]");
+    if (!button) return;
+    store.setFiltro("base", button.dataset.dashboardBase);
+    window.location.hash = "#registros";
+  };
+}
+
 export function renderDashboard(store) {
   const { summary } = store.metrics;
   const count = summary.registros;
@@ -47,5 +64,6 @@ export function renderDashboard(store) {
   document.getElementById("dashReviewAbsences").disabled = summary.noAsistieron === 0;
   document.getElementById("dashOpenAllAbsences").disabled = summary.noAsistieron === 0;
   renderAbsences(store.metrics);
+  renderBases(store);
   bindActions(store);
 }

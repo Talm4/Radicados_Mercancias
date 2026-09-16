@@ -8,7 +8,7 @@ import { renderCursos, abrirCurso, cerrarEntityDrawer } from "./cursos.js";
 import { renderGrupos, abrirGrupo } from "./grupos.js";
 import { initPerfil, abrirPerfil, renderPerfil } from "./perfil.js";
 import { initCertificados } from "./certificados.js";
-import { initNotas } from "./notas.js";
+import { initNotas, abrirActualizacionRepositorio, iniciarRevisionNotasManual } from "./notas.js";
 import { renderEstado } from "./ui.js";
 import { showToast } from "./utils.js";
 
@@ -31,10 +31,12 @@ function renderChrome() {
 
 window.actualizarDatos = async () => {
   const btn = document.getElementById("btnActualizarDatos");
+  abrirActualizacionRepositorio();
   btn.disabled = true;
   const result = await store.actualizar();
   btn.disabled = false;
   showToast(result.ok ? "Datos sincronizados." : "No fue posible actualizar.", result.ok ? "success" : "danger");
+  iniciarRevisionNotasManual({ descargar: false });
 };
 window.reintentarCarga = () => store.connect();
 window.navigate = navigate;
