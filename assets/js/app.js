@@ -1,13 +1,13 @@
 import { store } from "./store.js";
 import { initRouter, navigate, route } from "./router.js";
 import { initFiltros } from "./filtros.js";
-import { initAsistencias, render as renderRegistros } from "./asistencias.js";
+import { initAsistencias, render as renderRegistros } from "./asistencias.js?v=14";
 import { renderDashboard } from "./dashboard.js";
 import { renderColaboradores } from "./colaboradores.js";
 import { renderCursos, abrirCurso, cerrarEntityDrawer } from "./cursos.js";
 import { renderGrupos, abrirGrupo } from "./grupos.js";
 import { initPerfil, abrirPerfil, renderPerfil } from "./perfil.js";
-import { initCertificados } from "./certificados.js?v=12";
+import { initCertificados } from "./certificados.js?v=14";
 import { initNotas } from "./notas.js";
 import { renderEstado } from "./ui.js";
 import { showToast } from "./utils.js";

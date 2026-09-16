@@ -1,4 +1,4 @@
-import { certificateTextRuns } from "./certificados-core.js";
+import { certificateTextRuns } from "./certificados-core.js?v=14";
 
 function sanitizePdfText(value) {
   return String(value || "")

@@ -221,6 +221,7 @@ export const CONSOLIDADO_HEADERS = [
   "FECHA", "HORA", "SALÓN", "GRUPO", "ID", "NOMBRES Y APELLIDOS", "CARGO",
   "CORREO", "INSTRUCTOR", "ASISTIÓ", "NOTA", "OBSERVACIÓN", "RADICADO",
   "BASE CURSO", "INCIAL", "VMP I", "RECURRENTE", "VMP R", "ME", "OB",
+  "N° CERTIFICADO",
 ];
 
 export function detectarFilaEncabezados(rows) {
@@ -268,7 +269,16 @@ export function registroAFormatoConsolidado(rec) {
     "VMP R": safeStr(rec["VMP R"] || rec.VMP_R),
     "ME": safeStr(rec.ME),
     "OB": safeStr(rec.OB),
+    "N° CERTIFICADO": normalizarNumeroCertificadoLocal(rec.CERT_NUMERO),
   };
+}
+
+function normalizarNumeroCertificadoLocal(value) {
+  const raw = safeStr(value).trim().toUpperCase();
+  if (!raw) return "";
+  const sinPrefijoVisual = raw.replace(/^N\s*[°º]?\s*:\s*/, "");
+  const match = sinPrefijoVisual.match(/^(?:CI\s*[-:]?\s*)?(\d{1,12})$/);
+  return match ? `CI-${match[1].padStart(5, "0")}` : raw;
 }
 
 // Convierte una fila cruda del Excel (con encabezados desordenados o con

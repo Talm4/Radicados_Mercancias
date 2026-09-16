@@ -31,4 +31,6 @@
 - Los nombres de curso se presentan como `Básico Inicial` y `Básico Repaso` sin duplicados por tildes o mayúsculas.
 - La certificación exige asistencia afirmativa y nota superior a 80.
 - La vista del certificado es de solo lectura: ya no intenta reservar ni escribir el código antes de mostrarlo. Esto evita que una cuota de escritura impida visualizarlo.
+- La categoría del certificado se asigna automáticamente por cargo. Los cargos definidos para categoría 9 generan `Cat. 9`; `AGENTE OPERACIONES TERRESTRES`, `COORDINADOR PRM Y PUENTES DE ABORDAJE` y cualquier cargo fuera de esa lista generan `Cat. 8`.
+- La numeración conserva el prefijo `CI-`, respeta los códigos históricos importados, detecta el seriado más alto y asigna los siguientes desde `CI-15161` por antigüedad de la capacitación. La exportación incluye `N° CERTIFICADO` para facilitar la migración progresiva.
 - La página del PDF se dibuja dentro de la plataforma, conservando exactamente la plantilla, tipografía y negrillas del archivo generado.

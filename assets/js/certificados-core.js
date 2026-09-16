@@ -1,10 +1,27 @@
-import { parseHorasNumero } from "./utils.js";
+import { parseHorasNumero } from "./utils.js?v=14";
 
 const INSTRUCTORES_CERTIFICADO = new Map([
   ["ALVARO LOPEZ", { licencia: "94314461", tratamiento: "el Instructor" }],
   ["JUAN ARIAS", { licencia: "80022447", tratamiento: "el Instructor" }],
   ["ADRIANA VANEGAS", { licencia: "31172210", tratamiento: "la Instructora" }],
 ]);
+
+const CARGOS_CATEGORIA_9 = new Set([
+  "AGENTE DE SERVICIO AL CLIENTE",
+  "AGENTE DE SERVICIOS ESPECIALES",
+  "SUPERVISOR DE SERVICIO AL CLIENTE JUNIOR",
+  "AGENTE DE OPERACIONES DE VUELO",
+  "SUPERVISOR DE SERVICIO AL CLIENTE JUNIOR ENCARGO",
+  "AGENTE SERVICIOS ESPECIALES",
+  "APRENDIZ AGENTE DE SERVICIOS ESPECIALES",
+  "COORDINADOR DE SERVICIO AL CLIENTE",
+  "AGENTE ARGENTINAS COBRO PAX",
+  "JEFE DE SERVICIO AL PASAJERO BOG",
+  "ESPECIALISTA CENTRO CONTROL OPERACIONES",
+  "COORDINADOR DE SERVICIO AL CLIENTE SENIOR",
+]);
+
+export const PRIMER_SERIADO_CERTIFICADO = 15161;
 
 function normalizarTexto(value) {
   return String(value || "")
@@ -13,6 +30,18 @@ function normalizarTexto(value) {
     .trim()
     .toUpperCase()
     .replace(/\s+/g, " ");
+}
+
+function normalizarCargo(value) {
+  return normalizarTexto(value)
+    .replace(/[_\-–—/]+/g, " ")
+    .replace(/[^A-Z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function categoriaCertificadoPorCargo(cargo) {
+  return CARGOS_CATEGORIA_9.has(normalizarCargo(cargo)) ? "Cat. 9" : "Cat. 8";
 }
 
 export function instructorCertificado(instructor) {
@@ -34,6 +63,78 @@ export function secuenciaCertificado(value) {
   if (!normalized) return null;
   const sequence = Number(normalized.slice(3));
   return Number.isSafeInteger(sequence) ? sequence : null;
+}
+
+function clavePersonaCertificado(rec) {
+  return String(rec?.ID || rec?._personKey || "").trim();
+}
+
+function fechaOrdenCertificado(rec) {
+  const value = String(rec?.FECHA || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "9999-12-31";
+}
+
+export function planificarSeriadosAutomaticos(registrosExistentes = [], registrosImportados = []) {
+  const numeroPorPersona = new Map();
+  const propietarioPorNumero = new Map();
+  const usados = new Set();
+  let maximoDetectado = PRIMER_SERIADO_CERTIFICADO - 1;
+
+  const registrar = rec => {
+    const persona = clavePersonaCertificado(rec);
+    const numero = normalizarNumeroCertificado(rec?.CERT_NUMERO);
+    if (!persona || !numero) return;
+    const numeroPrevio = numeroPorPersona.get(persona);
+    if (numeroPrevio && numeroPrevio !== numero) {
+      throw new Error(`La cédula ${persona} tiene más de un seriado (${numeroPrevio} y ${numero}).`);
+    }
+    const propietarioPrevio = propietarioPorNumero.get(numero);
+    if (propietarioPrevio && propietarioPrevio !== persona) {
+      throw new Error(`${numero} está asignado a más de una cédula.`);
+    }
+    numeroPorPersona.set(persona, numero);
+    propietarioPorNumero.set(numero, persona);
+    usados.add(numero);
+    maximoDetectado = Math.max(maximoDetectado, secuenciaCertificado(numero) || 0);
+  };
+
+  registrosExistentes.forEach(registrar);
+  registrosImportados.forEach(registrar);
+
+  const pendientes = new Map();
+  registrosImportados.forEach(rec => {
+    const persona = clavePersonaCertificado(rec);
+    if (!persona || numeroPorPersona.has(persona) || !evaluarCertificacion(rec).elegible) return;
+    const actual = pendientes.get(persona);
+    const fecha = fechaOrdenCertificado(rec);
+    if (!actual || fecha < actual.fecha) {
+      pendientes.set(persona, { persona, fecha, nombre: String(rec.NOMBRES || "") });
+    }
+  });
+
+  const ordenados = [...pendientes.values()].sort((a, b) =>
+    a.fecha.localeCompare(b.fecha) || a.persona.localeCompare(b.persona) || a.nombre.localeCompare(b.nombre)
+  );
+  let siguiente = Math.max(PRIMER_SERIADO_CERTIFICADO - 1, maximoDetectado) + 1;
+  ordenados.forEach(item => {
+    let numero = `CI-${String(siguiente).padStart(5, "0")}`;
+    while (usados.has(numero)) {
+      siguiente++;
+      numero = `CI-${String(siguiente).padStart(5, "0")}`;
+    }
+    numeroPorPersona.set(item.persona, numero);
+    propietarioPorNumero.set(numero, item.persona);
+    usados.add(numero);
+    maximoDetectado = Math.max(maximoDetectado, siguiente);
+    siguiente++;
+  });
+
+  return {
+    numeroPorPersona,
+    asignados: ordenados.length,
+    maximoDetectado,
+    siguienteNumero: `CI-${String(Math.max(PRIMER_SERIADO_CERTIFICADO, maximoDetectado + 1)).padStart(5, "0")}`,
+  };
 }
 
 export function evaluarCertificacion(rec) {
@@ -103,7 +204,7 @@ export function certificateTextRuns(rec, config) {
     { text: ", participó y aprobó con una nota de " },
     { text: note, bold: true },
     { text: " el " },
-    { text: `CURSO ${certifiedCourse(rec, config.CERT_CATEGORIA)}`, bold: true },
+    { text: `CURSO ${certifiedCourse(rec, categoriaCertificadoPorCargo(rec.CARGO))}`, bold: true },
     { text: ", impartido mediante metodología " },
     { text: config.CERT_METODOLOGIA || "PRESENCIAL", bold: true },
     { text: " el día " },

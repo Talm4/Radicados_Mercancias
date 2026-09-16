@@ -4,13 +4,14 @@ import { store } from "./store.js";
 import { showToast } from "./utils.js";
 import { subirCertificado } from "./certificados-storage.js";
 import {
+  categoriaCertificadoPorCargo,
   certificateTextRuns,
   evaluarCertificacion,
   instructorCertificado,
   normalizarNumeroCertificado,
-} from "./certificados-core.js";
-import { asegurarNumeroCertificado, numeroCertificadoExistente } from "./certificados-numeracion.js?v=12";
-import { createCertificatePdf } from "./certificado-pdf.js?v=12";
+} from "./certificados-core.js?v=14";
+import { asegurarNumeroCertificado, numeroCertificadoExistente } from "./certificados-numeracion.js?v=14";
+import { createCertificatePdf } from "./certificado-pdf.js?v=14";
 
 const TEMPLATE_URL = "assets/pdf/PLANTILLA-CERTIFICADO.pdf";
 const CERT_FIELDS = ["certCategoria", "certMetodologia", "certCiudad", "certTratamiento", "certLicencia"];
@@ -37,7 +38,7 @@ function formValues(rec = currentRecord) {
   const instructor = instructorValues(rec);
   return {
     CERT_NUMERO: normalizarNumeroCertificado(document.getElementById("certNumero").value),
-    CERT_CATEGORIA: document.getElementById("certCategoria").value.trim(),
+    CERT_CATEGORIA: categoriaCertificadoPorCargo(rec.CARGO),
     CERT_METODOLOGIA: document.getElementById("certMetodologia").value.trim().toUpperCase(),
     CERT_CIUDAD: document.getElementById("certCiudad").value.trim().toUpperCase(),
     CERT_TRATAMIENTO_INSTRUCTOR: instructor.automatic?.tratamiento || document.getElementById("certTratamiento").value,
@@ -63,7 +64,7 @@ function fillForm(rec, number = "") {
   document.getElementById("certRecordId").value = rec._docId;
   document.getElementById("certModalTitle").textContent = `${rec.NOMBRES || "Colaborador"} · ${rec.CURSO || "Curso"}`;
   document.getElementById("certNumero").value = number || normalizarNumeroCertificado(rec.CERT_NUMERO) || "Asignando...";
-  document.getElementById("certCategoria").value = rec.CERT_CATEGORIA || "Cat. 8";
+  document.getElementById("certCategoria").value = categoriaCertificadoPorCargo(rec.CARGO);
   document.getElementById("certMetodologia").value = rec.CERT_METODOLOGIA || "PRESENCIAL";
   document.getElementById("certCiudad").value = rec.CERT_CIUDAD || rec.BASE || "";
   applyInstructorFields(rec);
@@ -73,7 +74,7 @@ function configFromRecord(rec, number) {
   const instructor = instructorValues(rec);
   return {
     CERT_NUMERO: number,
-    CERT_CATEGORIA: rec.CERT_CATEGORIA || "Cat. 8",
+    CERT_CATEGORIA: categoriaCertificadoPorCargo(rec.CARGO),
     CERT_METODOLOGIA: rec.CERT_METODOLOGIA || "PRESENCIAL",
     CERT_CIUDAD: rec.CERT_CIUDAD || rec.BASE || "",
     CERT_TRATAMIENTO_INSTRUCTOR: instructor.treatment,

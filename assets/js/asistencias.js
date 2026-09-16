@@ -9,13 +9,13 @@ import {
   showToast, validarRegistro, normalizarFilaExcel,
   formatFechaDisplay, formatHoraDisplay, parseFechaFlexible, normalizarNombreCurso,
   CONSOLIDADO_HEADERS, detectarFilaEncabezados, registroAFormatoConsolidado,
-} from "./utils.js";
+} from "./utils.js?v=14";
 import { store } from "./store.js";
 import { escapeHtml } from "./ui.js";
 import {
   normalizarCedula, clasificarRegistro, conTrazas, claveCitacion,
 } from "./capacitacion.js";
-import { normalizarNumeroCertificado } from "./certificados-core.js";
+import { normalizarNumeroCertificado, planificarSeriadosAutomaticos } from "./certificados-core.js?v=14";
 import {
   MAX_ARCHIVO_MB, TAMANO_LOTE_FIRESTORE, TAMANO_PAGINA_PREVIA,
   categorizarFilasImportacion, cederAlNavegador, crearIdTrabajo,
@@ -753,6 +753,16 @@ window.procesarCargaMasiva = function () {
         if (idx > 0 && idx % 500 === 0) await cederAlNavegador();
       }
 
+      // Toma primero todos los seriados históricos presentes en la base y en
+      // el archivo. A quienes todavía no tienen uno se les asigna el siguiente
+      // CI libre, por fecha de curso desde la más antigua hasta la más nueva.
+      const filasValidas = filas.filter(f => f.erroresFinal.length === 0).map(f => f.rec);
+      const planSeriados = planificarSeriadosAutomaticos(store.data, filasValidas);
+      filasValidas.forEach(rec => {
+        const numero = planSeriados.numeroPorPersona.get(rec.ID);
+        if (numero) rec.CERT_NUMERO = numero;
+      });
+
       // 3) Clasificar cada fila frente a lo existente en Firestore:
       //    NUEVO | ACTUALIZAR | SIN CAMBIOS | CON ERROR.
       const filasClasificadas = [];
@@ -761,7 +771,13 @@ window.procesarCargaMasiva = function () {
         if (f.erroresFinal.length > 0) {
           filasClasificadas.push({ ...f, accion: "error", objetivo: null, clase: null });
         } else {
-          const { accion, objetivo, motivo } = clasificarRegistro(f.rec, store.getPerson(f.rec.ID), store.estadoHoy);
+          let { accion, objetivo, motivo } = clasificarRegistro(f.rec, store.getPerson(f.rec.ID), store.estadoHoy);
+          const numeroEntrante = normalizarNumeroCertificado(f.rec.CERT_NUMERO);
+          const numeroExistente = normalizarNumeroCertificado(objetivo?.CERT_NUMERO);
+          if (accion === "sin_cambios" && numeroEntrante && numeroEntrante !== numeroExistente) {
+            accion = "actualizar";
+            motivo = `Asigna el seriado ${numeroEntrante}`;
+          }
           filasClasificadas.push({ ...f, accion, objetivo, motivo });
         }
         if (idx > 0 && idx % 500 === 0) {
@@ -918,7 +934,7 @@ window.confirmarSubidaValidos = async function () {
   const operacionesPersistibles = operaciones.map(op => {
     const { f } = op;
     const certificadoExistente = op.tipo === "actualizar" ? {
-      CERT_NUMERO: f.objetivo?.CERT_NUMERO || f.rec.CERT_NUMERO || "",
+      CERT_NUMERO: f.rec.CERT_NUMERO || f.objetivo?.CERT_NUMERO || "",
       CERT_CATEGORIA: f.objetivo?.CERT_CATEGORIA || "",
       CERT_METODOLOGIA: f.objetivo?.CERT_METODOLOGIA || "",
       CERT_CIUDAD: f.objetivo?.CERT_CIUDAD || "",

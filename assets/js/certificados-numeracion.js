@@ -1,9 +1,9 @@
 import { db } from "./firebase-config.js";
 import { doc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { store } from "./store.js";
-import { normalizarNumeroCertificado, secuenciaCertificado } from "./certificados-core.js";
+import { normalizarNumeroCertificado, PRIMER_SERIADO_CERTIFICADO, secuenciaCertificado } from "./certificados-core.js?v=14";
 
-const FIRST_SEQUENCE = 15161;
+const FIRST_SEQUENCE = PRIMER_SERIADO_CERTIFICADO;
 const COUNTER_REF = doc(db, "configuracion", "certificados");
 
 function personKey(rec) {

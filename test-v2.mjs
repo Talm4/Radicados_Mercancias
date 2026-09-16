@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { aggregateRecords, buildDataModel, filterRecords } from "./assets/js/data-engine.js";
 import {
+  categoriaCertificadoPorCargo,
   certificateTextRuns,
   certificateTexts,
   dateWords,
   instructorCertificado,
   normalizarNumeroCertificado,
+  planificarSeriadosAutomaticos,
   puedeCertificar,
   secuenciaCertificado,
 } from "./assets/js/certificados-core.js";
@@ -95,6 +97,36 @@ assert.equal(puedeCertificar({ ASISTIO: "SÍ", NOTA: "100" }), true);
 assert.deepEqual(instructorCertificado("ÁLVARO LÓPEZ"), { licencia: "94314461", tratamiento: "el Instructor" });
 assert.deepEqual(instructorCertificado("JUAN ARIAS"), { licencia: "80022447", tratamiento: "el Instructor" });
 assert.deepEqual(instructorCertificado("ADRIANA VANEGAS"), { licencia: "31172210", tratamiento: "la Instructora" });
+const cargosCategoria9 = [
+  "AGENTE DE SERVICIO AL CLIENTE",
+  "AGENTE DE SERVICIOS ESPECIALES",
+  "SUPERVISOR DE SERVICIO AL CLIENTE JUNIOR",
+  "AGENTE DE OPERACIONES DE VUELO",
+  "SUPERVISOR DE SERVICIO AL CLIENTE JUNIOR - ENCARGO",
+  "AGENTE SERVICIOS ESPECIALES",
+  "APRENDIZ AGENTE DE SERVICIOS ESPECIALES",
+  "COORDINADOR DE SERVICIO AL CLIENTE",
+  "AGENTE_ARGENTINAS_COBRO_PAX",
+  "JEFE DE SERVICIO AL PASAJERO BOG",
+  "ESPECIALISTA CENTRO CONTROL OPERACIONES",
+  "COORDINADOR DE SERVICIO AL CLIENTE SENIOR",
+];
+cargosCategoria9.forEach(cargo => assert.equal(categoriaCertificadoPorCargo(cargo), "Cat. 9", cargo));
+assert.equal(categoriaCertificadoPorCargo("AUXILIAR DE ASISTENCIA EN TIERRA"), "Cat. 8");
+assert.equal(categoriaCertificadoPorCargo("AGENTE   OPERACIONES TERRESTRES\u00a0"), "Cat. 8");
+assert.equal(categoriaCertificadoPorCargo("COORDINADOR PRM Y PUENTES DE ABORDAJE"), "Cat. 8");
+const category9Certificate = certificateTexts({
+  NOMBRES: "Persona Categoria Nueve", ID: "100000002", CARGO: "Agente de servicio al cliente",
+  CURSO: "Básico Repaso", FECHA: "2026-09-15", INTENSIDAD: "4 horas", NOTA: "95",
+  BASE: "BOG", INSTRUCTOR: "Adriana Vanegas", ASISTIO: "SÍ",
+}, { CERT_CATEGORIA: "Cat. 8", CERT_CIUDAD: "BOG" });
+assert.match(category9Certificate.body, /BÁSICO REPASO DE MERCANCÍAS PELIGROSAS - Cat\. 9/);
+const category8Certificate = certificateTexts({
+  NOMBRES: "Persona Categoria Ocho", ID: "100000003", CARGO: "AUXILIAR DE ASISTENCIA EN TIERRA",
+  CURSO: "Básico Inicial", FECHA: "2026-09-15", INTENSIDAD: "8 horas", NOTA: "95",
+  BASE: "BOG", INSTRUCTOR: "Adriana Vanegas", ASISTIO: "SÍ",
+}, { CERT_CATEGORIA: "Cat. 9", CERT_CIUDAD: "BOG" });
+assert.match(category8Certificate.body, /BÁSICO INICIAL DE MERCANCÍAS PELIGROSAS - Cat\. 8/);
 const juanCertificate = certificateTexts({
   NOMBRES: "Persona Prueba", ID: "100000001", CURSO: "Básico Inicial", FECHA: "2026-07-24",
   INTENSIDAD: "8 horas", NOTA: "95", BASE: "BOG", INSTRUCTOR: "Juan Arias", ASISTIO: "SÍ",
@@ -103,13 +135,28 @@ assert.match(juanCertificate.instructorText, /JUAN ARIAS habilitado con licencia
 assert.equal(normalizarNumeroCertificado("N°: CI-15161"), "CI-15161");
 assert.equal(normalizarNumeroCertificado("15162"), "CI-15162");
 assert.equal(secuenciaCertificado("CI-15162"), 15162);
+const planSeriados = planificarSeriadosAutomaticos([
+  { ID: "HISTORICO", CERT_NUMERO: "CI-15170" },
+], [
+  { ID: "NUEVO-TRES", NOMBRES: "Más reciente", FECHA: "2026-09-03", ASISTIO: "SÍ", NOTA: "95" },
+  { ID: "NUEVO-UNO", NOMBRES: "Más antiguo", FECHA: "2026-09-01", ASISTIO: "SÍ", NOTA: "100" },
+  { ID: "MIGRADO", NOMBRES: "Con código", FECHA: "2026-08-01", ASISTIO: "SÍ", NOTA: "90", CERT_NUMERO: "CI-15175" },
+  { ID: "NUEVO-DOS", NOMBRES: "Intermedio", FECHA: "2026-09-02", ASISTIO: "SÍ", NOTA: "85" },
+  { ID: "NO-ELEGIBLE", NOMBRES: "Sin aprobación", FECHA: "2026-07-01", ASISTIO: "SÍ", NOTA: "80" },
+]);
+assert.equal(planSeriados.numeroPorPersona.get("MIGRADO"), "CI-15175");
+assert.equal(planSeriados.numeroPorPersona.get("NUEVO-UNO"), "CI-15176");
+assert.equal(planSeriados.numeroPorPersona.get("NUEVO-DOS"), "CI-15177");
+assert.equal(planSeriados.numeroPorPersona.get("NUEVO-TRES"), "CI-15178");
+assert.equal(planSeriados.numeroPorPersona.has("NO-ELEGIBLE"), false);
+assert.equal(planSeriados.siguienteNumero, "CI-15179");
 const migrationHeaders = mapearEncabezados(["Cédula", "Nombres y apellidos", "N° Certificado"]);
 const migrated = normalizarFilaExcel({ "Cédula": "1047446658", "Nombres y apellidos": "Alexander Escobar", "N° Certificado": "CI-15161" }, migrationHeaders);
 assert.equal(migrated.CERT_NUMERO, "CI-15161");
 assert.equal(normalizarNombreCurso("BASICO inicial"), "Básico Inicial");
 assert.equal(normalizarNombreCurso("Básico Recurrente"), "Básico Repaso");
 assert.equal(normalizarNombreCurso("básico repaso"), "Básico Repaso");
-const plantillaHeaders = ["AÑO", "MES", "PROGRAMA DE ENTRENAMIENTO", "CURSO", "INTENSIDAD", "BASE", "FECHA", "HORA", "SALÓN", "GRUPO", "ID", "NOMBRES Y APELLIDOS", "CARGO", "CORREO", "INSTRUCTOR", "ASISTIÓ", "NOTA", "OBSERVACIÓN", "RADICADO", "BASE CURSO", "INCIAL", "VMP I", "RECURRENTE", "VMP R", "ME", "OB"];
+const plantillaHeaders = ["AÑO", "MES", "PROGRAMA DE ENTRENAMIENTO", "CURSO", "INTENSIDAD", "BASE", "FECHA", "HORA", "SALÓN", "GRUPO", "ID", "NOMBRES Y APELLIDOS", "CARGO", "CORREO", "INSTRUCTOR", "ASISTIÓ", "NOTA", "OBSERVACIÓN", "RADICADO", "BASE CURSO", "INCIAL", "VMP I", "RECURRENTE", "VMP R", "ME", "OB", "N° CERTIFICADO"];
 assert.deepEqual(CONSOLIDADO_HEADERS, plantillaHeaders);
 const detectedHeaders = detectarFilaEncabezados([
   ["Etiquetas de fila", "Cuenta de ID"],
@@ -123,6 +170,7 @@ const exportedRecord = registroAFormatoConsolidado({ ...records[0], FECHA: "2026
 assert.equal(exportedRecord["AÑO"], 2026);
 assert.equal(exportedRecord["MES"], 8);
 assert.equal(exportedRecord.CURSO, "Básico Repaso");
+assert.equal(exportedRecord["N° CERTIFICADO"], "");
 assert.equal(Object.keys(exportedRecord).length, CONSOLIDADO_HEADERS.length);
 assert.equal(tipoCursoPlataforma("Mercancías Peligrosas BÁSICO INICIAL"), "inicial");
 assert.equal(tipoCursoPlataforma("Básico recurrencia"), "recurrente");
