@@ -9,10 +9,11 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-  <link rel="stylesheet" href="assets/css/styles.css?v=10">
-  <link rel="stylesheet" href="assets/css/overrides.css?v=10">
+  <link rel="stylesheet" href="assets/css/styles.css?v=12">
+  <link rel="stylesheet" href="assets/css/overrides.css?v=12">
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -160,10 +161,10 @@
     <label>Licencia IET<input id="certLicencia" class="form-control" placeholder="31172210" aria-describedby="certLicenseHelp"><small id="certLicenseHelp" class="certificate-field-help"></small></label>
   </div><div class="certificate-preview"><span class="section-kicker">Vista previa del contenido</span><h4>CERTIFICA</h4><p id="certPreviewBody"></p><p id="certPreviewInstructor"></p><small>La plantilla institucional, firmas y logotipos se conservan en el PDF final.</small></div></div></div><div class="modal-footer certificate-actions"><span id="certStatus" class="me-auto small text-muted"></span><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button class="command-button secondary" onclick="guardarDatosCertificado()"><i class="fa-solid fa-floppy-disk"></i>Guardar datos</button><button class="command-button secondary" onclick="descargarCertificadoPDF()"><i class="fa-solid fa-download"></i>Descargar PDF</button><button class="command-button primary" onclick="guardarCertificadoFirebase()"><i class="fa-solid fa-cloud-arrow-up"></i>Guardar certificado</button></div></div></div></div>
 
-  <div class="modal fade" id="modalVistaCertificado" tabindex="-1" aria-labelledby="certViewerTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-lg-down"><div class="modal-content certificate-viewer-modal"><div class="modal-header"><div><span class="section-kicker">Certificado del colaborador</span><h5 id="certViewerTitle">Certificado</h5></div><button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body certificate-viewer-body"><div id="certViewerLoading" class="certificate-viewer-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Preparando certificado…</div><iframe id="certViewerFrame" class="certificate-viewer-frame d-none" title="Vista previa del certificado PDF"></iframe></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button id="certViewerDownload" class="command-button primary" onclick="descargarCertificadoVisto()" disabled><i class="fa-solid fa-download"></i>Descargar certificado</button></div></div></div></div>
+  <div class="modal fade" id="modalVistaCertificado" tabindex="-1" aria-labelledby="certViewerTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-lg-down"><div class="modal-content certificate-viewer-modal"><div class="modal-header"><div><span class="section-kicker">Certificado del colaborador</span><h5 id="certViewerTitle">Certificado</h5></div><button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body certificate-viewer-body"><div id="certViewerLoading" class="certificate-viewer-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Preparando certificado…</div><canvas id="certViewerCanvas" class="certificate-viewer-canvas d-none" aria-label="Vista previa del certificado"></canvas><div id="certViewerNotice" class="certificate-viewer-notice" aria-live="polite"></div></div><div class="modal-footer"><button class="command-button secondary" data-bs-dismiss="modal">Cerrar</button><button id="certViewerDownload" class="command-button primary" onclick="descargarCertificadoVisto()" disabled><i class="fa-solid fa-download"></i>Descargar certificado</button></div></div></div></div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="assets/js/theme.js"></script>
-  <script type="module" src="assets/js/app.js?v=10"></script>
+  <script type="module" src="assets/js/app.js?v=12"></script>
 </body>
 </html>

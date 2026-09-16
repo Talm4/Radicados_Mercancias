@@ -18,7 +18,7 @@ function personRecords(rec) {
   return records.length ? records : [rec];
 }
 
-function existingNumber(rec) {
+export function numeroCertificadoExistente(rec) {
   const numbers = [...new Set(personRecords(rec).map(item => normalizarNumeroCertificado(item.CERT_NUMERO)).filter(Boolean))];
   if (numbers.length > 1) {
     throw new Error(`El colaborador tiene más de un código asignado (${numbers.join(", ")}). Corrige la migración antes de generar el certificado.`);
@@ -62,7 +62,7 @@ function syncLocalPerson(rec, number) {
 
 export async function asegurarNumeroCertificado(rec) {
   const ownerKey = personKey(rec);
-  const migratedNumber = existingNumber(rec);
+  const migratedNumber = numeroCertificadoExistente(rec);
   if (migratedNumber) assertLocalOwnership(migratedNumber, ownerKey);
   const localMaximum = maxExistingSequence();
   const recordRef = doc(db, "capacitaciones", rec._docId);

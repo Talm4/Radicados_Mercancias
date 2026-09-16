@@ -9,15 +9,15 @@ import {
   instructorCertificado,
   normalizarNumeroCertificado,
 } from "./certificados-core.js";
-import { asegurarNumeroCertificado } from "./certificados-numeracion.js";
-import { createCertificatePdf } from "./certificado-pdf.js";
+import { asegurarNumeroCertificado, numeroCertificadoExistente } from "./certificados-numeracion.js?v=12";
+import { createCertificatePdf } from "./certificado-pdf.js?v=12";
 
 const TEMPLATE_URL = "assets/pdf/PLANTILLA-CERTIFICADO.pdf";
 const CERT_FIELDS = ["certCategoria", "certMetodologia", "certCiudad", "certTratamiento", "certLicencia"];
 let modal;
 let viewerModal;
 let currentRecord = null;
-let viewerUrl = "";
+let viewerDocument = null;
 
 function ensureEligible(rec) {
   const result = evaluarCertificacion(rec);
@@ -140,9 +140,9 @@ export async function saveCertificateConfig({ quiet = false } = {}) {
   return values;
 }
 
-export async function buildCertificatePdf(rec, config) {
+export async function buildCertificatePdf(rec, config, { preview = false } = {}) {
   ensureEligible(rec);
-  const number = normalizarNumeroCertificado(config.CERT_NUMERO);
+  const number = normalizarNumeroCertificado(config.CERT_NUMERO) || (preview ? "PENDIENTE" : "");
   if (!number) throw new Error("El certificado no tiene un código único válido.");
   if (!window.PDFLib) throw new Error("La librería para generar PDF no está disponible.");
   const template = await fetch(TEMPLATE_URL).then(response => {
@@ -166,42 +166,78 @@ async function currentPdf() {
   return { bytes: await buildCertificatePdf(currentRecord, config), config };
 }
 
-function releaseViewerUrl() {
-  if (viewerUrl) URL.revokeObjectURL(viewerUrl);
-  viewerUrl = "";
+async function releaseViewerDocument() {
+  if (viewerDocument) {
+    try { await viewerDocument.destroy(); }
+    catch { /* el documento ya estaba cerrado */ }
+  }
+  viewerDocument = null;
+}
+
+async function renderCertificateCanvas(bytes) {
+  if (!window.pdfjsLib) throw new Error("El visor del certificado no está disponible. Recarga la página e inténtalo de nuevo.");
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  await releaseViewerDocument();
+  const loadingTask = window.pdfjsLib.getDocument({ data: Uint8Array.from(bytes) });
+  viewerDocument = await loadingTask.promise;
+  const page = await viewerDocument.getPage(1);
+  const body = document.querySelector(".certificate-viewer-body");
+  const canvas = document.getElementById("certViewerCanvas");
+  const baseViewport = page.getViewport({ scale: 1 });
+  const availableWidth = Math.max(320, (body?.clientWidth || baseViewport.width) - 48);
+  const cssScale = Math.min(1.45, availableWidth / baseViewport.width);
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
+  canvas.width = Math.ceil(renderViewport.width);
+  canvas.height = Math.ceil(renderViewport.height);
+  canvas.style.width = `${Math.ceil(renderViewport.width / pixelRatio)}px`;
+  canvas.style.height = `${Math.ceil(renderViewport.height / pixelRatio)}px`;
+  const context = canvas.getContext("2d", { alpha: false });
+  await page.render({ canvasContext: context, viewport: renderViewport, background: "rgb(255,255,255)" }).promise;
+  return canvas;
 }
 
 export async function viewCertificate(docId) {
   const rec = store.getRecord(docId);
   if (!rec) throw new Error("No se encontró el registro para visualizar el certificado.");
   ensureEligible(rec);
-  const frame = document.getElementById("certViewerFrame");
+  const canvas = document.getElementById("certViewerCanvas");
   const loading = document.getElementById("certViewerLoading");
   const downloadButton = document.getElementById("certViewerDownload");
+  const notice = document.getElementById("certViewerNotice");
   document.getElementById("certViewerTitle").textContent = `${rec.NOMBRES || "Colaborador"} · ${rec.CURSO || "Curso"}`;
-  frame.classList.add("d-none");
+  canvas.classList.add("d-none");
   loading.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Preparando certificado...';
   loading.classList.remove("d-none");
   downloadButton.disabled = true;
+  notice.textContent = "";
   viewerModal.show();
-  releaseViewerUrl();
+  await releaseViewerDocument();
   let number;
   let bytes;
   try {
-    number = await asegurarNumeroCertificado(rec);
-    bytes = await buildCertificatePdf(rec, configFromRecord(rec, number));
+    number = numeroCertificadoExistente(rec);
+    bytes = await buildCertificatePdf(rec, configFromRecord(rec, number), { preview: true });
   } catch (error) {
     loading.textContent = error.message || "No fue posible preparar el certificado.";
     throw error;
   }
-  viewerUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  frame.src = `${viewerUrl}#toolbar=1&navpanes=0&view=FitH`;
-  frame.onload = () => {
+  try {
+    await renderCertificateCanvas(bytes);
     loading.classList.add("d-none");
-    frame.classList.remove("d-none");
-    downloadButton.disabled = false;
+    canvas.classList.remove("d-none");
+    downloadButton.disabled = !number;
+    notice.textContent = number
+      ? ""
+      : "Vista previa. Configura el certificado para asignar el código y habilitar la descarga.";
+  } catch (error) {
+    loading.textContent = error.message || "No fue posible mostrar el certificado.";
+    throw error;
+  }
+  window.descargarCertificadoVisto = () => {
+    if (!number) return showToast("Configura el certificado antes de descargarlo.", "warning");
+    downloadBytes(bytes, fileName(rec));
   };
-  window.descargarCertificadoVisto = () => downloadBytes(bytes, fileName(rec));
 }
 
 function downloadBytes(bytes, name) {
@@ -246,9 +282,14 @@ async function safeAction(action) {
 export function initCertificados() {
   modal = new bootstrap.Modal(document.getElementById("modalCertificado"));
   viewerModal = new bootstrap.Modal(document.getElementById("modalVistaCertificado"));
-  document.getElementById("modalVistaCertificado").addEventListener("hidden.bs.modal", () => {
-    document.getElementById("certViewerFrame").src = "about:blank";
-    releaseViewerUrl();
+  document.getElementById("modalVistaCertificado").addEventListener("hidden.bs.modal", async () => {
+    const canvas = document.getElementById("certViewerCanvas");
+    canvas.classList.add("d-none");
+    const context = canvas.getContext("2d");
+    context?.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.width = 0;
+    canvas.height = 0;
+    await releaseViewerDocument();
   });
   CERT_FIELDS.forEach(id => {
     const field = document.getElementById(id);

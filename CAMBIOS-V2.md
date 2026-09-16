@@ -30,3 +30,5 @@
 - Cursos presenta cada tipo de capacitación; Grupos funciona como agenda operativa.
 - Los nombres de curso se presentan como `Básico Inicial` y `Básico Repaso` sin duplicados por tildes o mayúsculas.
 - La certificación exige asistencia afirmativa y nota superior a 80.
+- La vista del certificado es de solo lectura: ya no intenta reservar ni escribir el código antes de mostrarlo. Esto evita que una cuota de escritura impida visualizarlo.
+- La página del PDF se dibuja dentro de la plataforma, conservando exactamente la plantilla, tipografía y negrillas del archivo generado.
