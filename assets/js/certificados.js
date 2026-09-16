@@ -109,7 +109,7 @@ export async function abrirEditorCertificado(docId) {
   ensureEligible(rec);
   currentRecord = rec;
   fillForm(rec);
-  setStatus("Validando el código único en Firebase...");
+  setStatus("Validando el código único...");
   refreshPreview();
   modal.show();
   const number = await asegurarNumeroCertificado(rec);
@@ -134,7 +134,7 @@ export async function saveCertificateConfig({ quiet = false } = {}) {
   }, { merge: true });
   Object.assign(currentRecord, values);
   if (!quiet) {
-    setStatus(`Datos guardados en Firebase con el código ${number}.`, "success");
+    setStatus(`Datos guardados con el código ${number}.`, "success");
     showToast("Datos del certificado guardados.", "success");
   }
   return values;
@@ -230,7 +230,7 @@ export async function uploadCurrentCertificate() {
   const bytes = await buildCertificatePdf(currentRecord, config);
   const file = new File([bytes], fileName(currentRecord), { type: "application/pdf" });
   await subirCertificado(currentRecord.ID, currentRecord.NOMBRES, file);
-  setStatus("Certificado guardado en Firebase Storage.", "success");
+  setStatus("Certificado guardado correctamente.", "success");
   showToast("Certificado guardado correctamente.", "success");
 }
 

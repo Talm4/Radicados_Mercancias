@@ -213,6 +213,64 @@ export function mapearEncabezados(headersOriginales) {
   return mapa;
 }
 
+// Formato operativo usado por el Consolidado de Radicación. Las columnas
+// auxiliares se conservan al exportar, aunque la aplicación solo procesa las
+// que necesita para asistencia y calificaciones.
+export const CONSOLIDADO_HEADERS = [
+  "AÑO", "MES", "PROGRAMA DE ENTRENAMIENTO", "CURSO", "INTENSIDAD", "BASE",
+  "FECHA", "HORA", "SALÓN", "GRUPO", "ID", "NOMBRES Y APELLIDOS", "CARGO",
+  "CORREO", "INSTRUCTOR", "ASISTIÓ", "NOTA", "OBSERVACIÓN", "RADICADO",
+  "BASE CURSO", "INCIAL", "VMP I", "RECURRENTE", "VMP R", "ME", "OB",
+];
+
+export function detectarFilaEncabezados(rows) {
+  let mejor = null;
+  rows.forEach((row, index) => {
+    if (!Array.isArray(row)) return;
+    const headers = row.map(value => safeStr(value).trim());
+    const mapa = mapearEncabezados(headers);
+    if (!mapa.ID || !mapa.NOMBRES) return;
+    const puntaje = Object.keys(mapa).length + (mapa.CURSO ? 3 : 0) + (mapa.FECHA ? 2 : 0);
+    if (!mejor || puntaje > mejor.puntaje) mejor = { index, headers, mapa, puntaje };
+  });
+  return mejor;
+}
+
+export function registroAFormatoConsolidado(rec) {
+  const fecha = parseFechaFlexible(rec.FECHA);
+  const iso = fecha.valid && !fecha.empty ? fecha.iso : "";
+  const mes = iso ? Number(iso.slice(5, 7)) : "";
+  const ano = iso ? Number(iso.slice(0, 4)) : "";
+  return {
+    "AÑO": ano,
+    "MES": mes,
+    "PROGRAMA DE ENTRENAMIENTO": safeStr(rec.PROGRAMA),
+    "CURSO": normalizarNombreCurso(rec.CURSO),
+    "INTENSIDAD": safeStr(rec.INTENSIDAD),
+    "BASE": safeStr(rec.BASE),
+    "FECHA": iso || safeStr(rec.FECHA),
+    "HORA": safeStr(rec.HORA),
+    "SALÓN": safeStr(rec.SALON),
+    "GRUPO": safeStr(rec.GRUPO),
+    "ID": safeStr(rec.ID),
+    "NOMBRES Y APELLIDOS": safeStr(rec.NOMBRES),
+    "CARGO": safeStr(rec.CARGO),
+    "CORREO": safeStr(rec.CORREO),
+    "INSTRUCTOR": safeStr(rec.INSTRUCTOR),
+    "ASISTIÓ": safeStr(rec.ASISTIO),
+    "NOTA": safeStr(rec.NOTA),
+    "OBSERVACIÓN": safeStr(rec.OBSERVACION),
+    "RADICADO": safeStr(rec.RADICADO),
+    "BASE CURSO": safeStr(rec["BASE CURSO"] || rec.BASE_CURSO),
+    "INCIAL": safeStr(rec.INCIAL),
+    "VMP I": safeStr(rec["VMP I"] || rec.VMP_I),
+    "RECURRENTE": safeStr(rec.RECURRENTE),
+    "VMP R": safeStr(rec["VMP R"] || rec.VMP_R),
+    "ME": safeStr(rec.ME),
+    "OB": safeStr(rec.OB),
+  };
+}
+
 // Convierte una fila cruda del Excel (con encabezados desordenados o con
 // alias) en un registro con las claves oficiales.
 export function normalizarFilaExcel(rowRaw, mapaEncabezados) {

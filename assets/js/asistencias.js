@@ -6,8 +6,9 @@
 import { db, colRef, CAMPOS } from "./firebase-config.js";
 import { doc, setDoc, addDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import {
-  showToast, validarRegistro, mapearEncabezados, normalizarFilaExcel,
+  showToast, validarRegistro, normalizarFilaExcel,
   formatFechaDisplay, formatHoraDisplay, parseFechaFlexible, normalizarNombreCurso,
+  CONSOLIDADO_HEADERS, detectarFilaEncabezados, registroAFormatoConsolidado,
 } from "./utils.js";
 import { store } from "./store.js";
 import { escapeHtml } from "./ui.js";
@@ -29,6 +30,8 @@ let previewCategory = "nuevos";
 let previewPage = 1;
 let previewSize = TAMANO_PAGINA_PREVIA;
 let activeUploadJob = null;
+let gridEditMode = false;
+const pendingGridEdits = new Map();
 
 let sortKey = "FECHA";
 let sortDir = -1;
@@ -37,14 +40,18 @@ let pageSize = 25;
 let sortedCache = { key: "", rows: [] };
 
 const COLUMNAS = [
-  { key: "ID", label: "ID" },
-  { key: "NOMBRES", label: "Colaborador" },
-  { key: "CURSO", label: "Curso" },
   { key: "PROGRAMA", label: "Programa" },
-  { key: "FECHA", label: "Fecha" },
+  { key: "CURSO", label: "Curso" },
+  { key: "INTENSIDAD", label: "Intensidad" },
   { key: "BASE", label: "Base" },
+  { key: "FECHA", label: "Fecha" },
   { key: "HORA", label: "Hora" },
+  { key: "SALON", label: "Salón" },
   { key: "GRUPO", label: "Grupo" },
+  { key: "ID", label: "ID" },
+  { key: "NOMBRES", label: "Nombres y apellidos" },
+  { key: "CARGO", label: "Cargo" },
+  { key: "CORREO", label: "Correo" },
   { key: "INSTRUCTOR", label: "Instructor" },
   { key: "ASISTIO", label: "Asistió" },
   { key: "NOTA", label: "Nota" },
@@ -188,12 +195,20 @@ function renderTbody(slice, estado) {
     });
   });
 
+  if (gridEditMode) activarEventosEdicionRapida(tbody);
+
   const allBox = document.getElementById("selectAllCheckbox");
   if (allBox) allBox.checked = slice.length > 0 && slice.every(d => selectedIds.has(d._docId));
 }
 
 function filaCelda(item, key) {
-  const v = escapeHtml(item[key] || "");
+  const pendiente = pendingGridEdits.get(item._docId)?.[key];
+  const valor = pendiente !== undefined ? pendiente : (item[key] || "");
+  if (gridEditMode) {
+    const dirty = pendiente !== undefined ? " is-dirty" : "";
+    return `<td class="sheet-cell${dirty}" contenteditable="true" spellcheck="false" tabindex="0" data-grid-id="${escapeHtml(item._docId)}" data-grid-field="${key}" data-original="${escapeHtml(item[key] || "")}">${escapeHtml(valor)}</td>`;
+  }
+  const v = escapeHtml(valor);
   switch (key) {
     case "ID": return `<td class="id-cell">${v || "—"}</td>`;
     case "NOMBRES": return `<td title="${v}">${v
@@ -214,6 +229,153 @@ function filaCelda(item, key) {
     default: return `<td>${v || "—"}</td>`;
   }
 }
+
+function valorCelda(cell) {
+  return cell.innerText.replace(/\r?\n/g, " ").trim();
+}
+
+function registrarCambioCelda(cell) {
+  const id = cell.dataset.gridId;
+  const field = cell.dataset.gridField;
+  const item = store.getRecord(id);
+  if (!item) return;
+  const value = valorCelda(cell);
+  const original = String(item[field] || "").trim();
+  const changes = { ...(pendingGridEdits.get(id) || {}) };
+  if (value === original) delete changes[field];
+  else changes[field] = value;
+  if (Object.keys(changes).length) pendingGridEdits.set(id, changes);
+  else pendingGridEdits.delete(id);
+  cell.classList.toggle("is-dirty", value !== original);
+  actualizarBarraEdicion();
+}
+
+function pegarDesdeExcel(event, startCell) {
+  const text = event.clipboardData?.getData("text/plain");
+  if (!text || (!text.includes("\t") && !text.includes("\n"))) return;
+  event.preventDefault();
+  const rows = text.replace(/\r/g, "").replace(/\n$/, "").split("\n").map(row => row.split("\t"));
+  const rowEls = [...document.querySelectorAll("#tableBody tr")];
+  const startRow = rowEls.indexOf(startCell.closest("tr"));
+  const startCol = COLUMNAS.findIndex(col => col.key === startCell.dataset.gridField);
+  rows.forEach((values, rowOffset) => {
+    const row = rowEls[startRow + rowOffset];
+    if (!row) return;
+    values.forEach((value, colOffset) => {
+      const key = COLUMNAS[startCol + colOffset]?.key;
+      if (!key) return;
+      const target = row.querySelector(`[data-grid-field="${key}"]`);
+      if (!target) return;
+      target.textContent = value;
+      registrarCambioCelda(target);
+    });
+  });
+}
+
+function activarEventosEdicionRapida(tbody) {
+  tbody.querySelectorAll(".sheet-cell").forEach(cell => {
+    cell.addEventListener("input", () => registrarCambioCelda(cell));
+    cell.addEventListener("blur", () => registrarCambioCelda(cell));
+    cell.addEventListener("paste", event => pegarDesdeExcel(event, cell));
+    cell.addEventListener("keydown", event => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        window.guardarGridEdit();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        const row = cell.closest("tr")?.nextElementSibling;
+        row?.querySelector(`[data-grid-field="${cell.dataset.gridField}"]`)?.focus();
+      }
+    });
+  });
+}
+
+function actualizarBarraEdicion() {
+  const bar = document.getElementById("gridEditBar");
+  const count = document.getElementById("gridEditCount");
+  const button = document.getElementById("btnEditarTabla");
+  bar?.classList.toggle("d-none", !gridEditMode);
+  document.querySelector("#view-registros .data-surface")?.classList.toggle("grid-editing", gridEditMode);
+  if (count) count.textContent = pendingGridEdits.size
+    ? `${pendingGridEdits.size} registro(s) con cambios`
+    : "Sin cambios";
+  if (button) button.innerHTML = gridEditMode
+    ? '<i class="fa-solid fa-xmark"></i>Salir de edición'
+    : '<i class="fa-solid fa-table-cells"></i>Editar tabla';
+}
+
+function normalizarCambioGrid(field, value) {
+  const text = String(value ?? "").trim();
+  if (field === "ID") return normalizarCedula(text);
+  if (field === "CURSO") return normalizarNombreCurso(text);
+  if (field === "FECHA") {
+    const fecha = parseFechaFlexible(text);
+    return fecha.valid && !fecha.empty ? fecha.iso : text;
+  }
+  if (field === "ASISTIO") return text.toUpperCase() === "NO" ? "NO" : "SÍ";
+  if (field === "NOTA" && text) {
+    const numero = Number(text.replace(",", "."));
+    return Number.isFinite(numero) ? String(Math.round(numero)) : text;
+  }
+  return text;
+}
+
+window.toggleGridEdit = function () {
+  if (gridEditMode && pendingGridEdits.size && !confirm("Hay cambios sin guardar. ¿Salir y descartarlos?")) return;
+  if (gridEditMode) pendingGridEdits.clear();
+  gridEditMode = !gridEditMode;
+  actualizarBarraEdicion();
+  render(store);
+};
+
+window.cancelarGridEdit = function () {
+  if (pendingGridEdits.size && !confirm("¿Descartar los cambios realizados en la tabla?")) return;
+  pendingGridEdits.clear();
+  gridEditMode = false;
+  actualizarBarraEdicion();
+  render(store);
+};
+
+window.guardarGridEdit = async function () {
+  if (!pendingGridEdits.size) return showToast("No hay cambios para guardar.", "warning");
+  const operaciones = [];
+  const errores = [];
+  pendingGridEdits.forEach((changes, docId) => {
+    const original = store.getRecord(docId);
+    if (!original) return errores.push(`El registro ${docId} ya no está disponible.`);
+    const normalizados = Object.fromEntries(Object.entries(changes).map(([field, value]) => [field, normalizarCambioGrid(field, value)]));
+    const combinado = { ...original, ...normalizados };
+    const validacion = validarRegistro(combinado);
+    if (!validacion.valido) errores.push(`${combinado.NOMBRES || combinado.ID}: ${validacion.errores.join(", ")}`);
+    else operaciones.push({ docId, original, changes: normalizados });
+  });
+  if (errores.length) {
+    showToast(`Corrige ${errores.length} registro(s). ${errores[0]}`, "danger");
+    return;
+  }
+  const button = document.querySelector("#gridEditBar .command-button.primary");
+  if (button) { button.disabled = true; button.textContent = "Guardando..."; }
+  try {
+    for (let inicio = 0; inicio < operaciones.length; inicio += 450) {
+      const batch = writeBatch(db);
+      operaciones.slice(inicio, inicio + 450).forEach(op => {
+        const datos = conTrazas(op.changes, "Edición rápida", "actualizar", op.original);
+        batch.set(doc(db, "capacitaciones", op.docId), datos, { merge: true });
+      });
+      await batch.commit();
+    }
+    showToast(`${operaciones.length} registro(s) actualizados.`, "success");
+    pendingGridEdits.clear();
+    gridEditMode = false;
+    actualizarBarraEdicion();
+    render(store);
+  } catch (error) {
+    console.error(error);
+    showToast("No se pudieron guardar todos los cambios.", "danger");
+  } finally {
+    if (button) { button.disabled = false; button.textContent = "Guardar cambios"; }
+  }
+};
 
 /* ============================== TARJETAS MÓVILES ============================== */
 function renderMobileCards(slice) {
@@ -461,17 +623,34 @@ window.aplicarEdicionMasiva = async function () {
 window.exportarExcel = function () {
   const data = store.filtered;
   if (data.length === 0) return showToast("No hay datos visibles para exportar.", "warning");
-  const cleanData = data.map(({ _docId, ...rest }) => {
-    const ordenado = {};
-    [...CAMPOS, "CERT_NUMERO"].forEach(c => ordenado[c] = rest[c] || "");
-    return ordenado;
-  });
-  const ws = XLSX.utils.json_to_sheet(cleanData);
+  const cleanData = data.map(registroAFormatoConsolidado);
+  const ws = XLSX.utils.json_to_sheet(cleanData, { header: CONSOLIDADO_HEADERS });
+  ws["!autofilter"] = { ref: `A1:Z${cleanData.length + 1}` };
+  ws["!cols"] = CONSOLIDADO_HEADERS.map(header => ({ wch: Math.min(38, Math.max(10, header.length + 2)) }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Capacitaciones");
-  XLSX.writeFile(wb, `TDC_Capacitaciones_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, "Hoja1");
+  XLSX.writeFile(wb, `Consolidado_Radicacion_MP_${new Date().toISOString().slice(0, 10)}.xlsx`);
   showToast(`Exportados ${cleanData.length} registro(s) a Excel.`, "success");
 };
+
+function encontrarHojaOperativa(workbook) {
+  let mejor = null;
+  workbook.SheetNames.forEach(nombre => {
+    const sheet = workbook.Sheets[nombre];
+    if (!sheet?.["!ref"]) return;
+    const range = XLSX.utils.decode_range(sheet["!ref"]);
+    const previewRange = {
+      s: { r: range.s.r, c: range.s.c },
+      e: { r: Math.min(range.e.r, range.s.r + 19), c: range.e.c },
+    };
+    const preview = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: true, range: previewRange });
+    const detected = detectarFilaEncabezados(preview);
+    if (!detected) return;
+    const candidate = { ...detected, sheet, nombre, headerRow: range.s.r + detected.index };
+    if (!mejor || candidate.puntaje > mejor.puntaje) mejor = candidate;
+  });
+  return mejor;
+}
 
 /* ============================== CARGA MASIVA ============================== */
 window.procesarCargaMasiva = function () {
@@ -491,15 +670,20 @@ window.procesarCargaMasiva = function () {
     try {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+      const selected = encontrarHojaOperativa(workbook);
+      if (!selected) {
+        statusDiv.innerText = "";
+        showToast("No se encontró una hoja con las columnas ID y Nombres y apellidos.", "danger");
+        return;
+      }
+      statusDiv.innerText = `Leyendo ${selected.nombre}...`;
+      const jsonData = XLSX.utils.sheet_to_json(selected.sheet, { defval: "", range: selected.headerRow });
       if (jsonData.length === 0) {
         statusDiv.innerText = "";
         showToast("El archivo no contiene filas de datos.", "warning");
         return;
       }
-      const headers = Object.keys(jsonData[0]);
-      const mapa = mapearEncabezados(headers);
+      const mapa = selected.mapa;
       if (!mapa.ID || !mapa.NOMBRES) {
         statusDiv.innerText = "";
         showToast("No se pudo identificar las columnas ID y/o Nombres. Revisa los encabezados del archivo.", "danger");
@@ -521,7 +705,7 @@ window.procesarCargaMasiva = function () {
           if (rec._fechaValida === false) erroresFinal.push("Fecha con formato irreconocible");
           delete rec._fechaValida;
           if (!rec.CURSO) erroresFinal.push("Curso vacío");
-          filas.push({ fila: idx + 2, rec, erroresFinal });
+          filas.push({ fila: selected.headerRow + idx + 2, rec, erroresFinal });
         }
         await cederAlNavegador();
       }
@@ -816,7 +1000,7 @@ async function ejecutarTrabajoImportacion(trabajo) {
     showToast(`Carga completada: ${creados.toLocaleString("es-CO")} creados y ${actualizados.toLocaleString("es-CO")} actualizados.`, "success");
     modalValidacion.hide();
     mostrarResultadoCarga({ ...trabajo.resumen, creados, actualizados });
-    iniciarRevisionNotasManual({ descargar: false });
+    iniciarRevisionNotasManual({ automatico: true });
     pendingImport = { filas: [], resumen: null, categorias: null, archivo: null };
     activeUploadJob = null;
     document.getElementById("excelFileInput").value = "";
@@ -907,7 +1091,7 @@ window.reanudarCargaPendiente = async function () {
 window.descartarCargaPendiente = async function () {
   const trabajo = activeUploadJob || await leerTrabajoPendiente();
   if (!trabajo) return;
-  if (!confirm("¿Descartar el avance pendiente? Los lotes que Firebase ya confirmó permanecerán guardados.")) return;
+  if (!confirm("¿Descartar el avance pendiente? Los lotes ya guardados permanecerán disponibles.")) return;
   await eliminarTrabajoImportacion(trabajo.id);
   activeUploadJob = null;
   const cont = document.getElementById("cargaResultado");

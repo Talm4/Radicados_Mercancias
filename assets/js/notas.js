@@ -5,9 +5,9 @@ import { showToast } from "./utils.js";
 import { planificarActualizacionesNotas } from "./notas-core.js";
 
 export const REPORTE_URL = "https://aprende.talma.com.co/reporteglobal.xlsx";
-export const GITHUB_WORKFLOW_URL = "https://github.com/Talm4/Radicados_Mercancias/actions/workflows/actualizar-notas-manual.yml";
 let modalNotas;
 let procesando = false;
+let descargando = false;
 
 function setEstado(texto, tipo = "") {
   const el = document.getElementById("notasEstado");
@@ -32,18 +32,16 @@ export function descargarReporteAprende() {
   enlace.remove();
 }
 
-export function abrirActualizacionRepositorio() {
-  window.open(GITHUB_WORKFLOW_URL, "_blank", "noopener,noreferrer");
-}
-
-export function iniciarRevisionNotasManual({ descargar = true } = {}) {
-  if (descargar) descargarReporteAprende();
+export async function iniciarRevisionNotasManual({ automatico = true } = {}) {
   modalNotas.show();
   document.getElementById("notasContenido")?.classList.remove("d-none");
-  setEstado(descargar
-    ? "Selecciona el reporteglobal.xlsx recién descargado. La validación comenzará automáticamente."
-    : "Ejecuta la actualización manual en GitHub. El reporte se descarga y valida allí sin guardarse en tu computador.", "warning");
   setProgreso(0);
+  document.getElementById("notasResultado").innerHTML = "";
+  if (!automatico || procesando) {
+    setEstado("Selecciona reporteglobal.xlsx para iniciar la validación.", "warning");
+    return;
+  }
+  await descargarYProcesarReporte();
 }
 
 function resumenHtml(stats, lectura) {
@@ -68,7 +66,7 @@ async function escribirNotas(actualizaciones) {
   }
 }
 
-function procesarArchivo(file) {
+function procesarBuffer(buffer) {
   if (procesando) return;
   procesando = true;
   const input = document.getElementById("reportFileInput");
@@ -107,11 +105,44 @@ function procesarArchivo(file) {
     }
   };
   worker.onerror = event => { worker.terminate(); finalizarError(event.message || "No fue posible procesar el reporte."); };
-  file.arrayBuffer().then(buffer => worker.postMessage(buffer, [buffer])).catch(error => finalizarError(error.message));
+  worker.postMessage(buffer, [buffer]);
+}
+
+function procesarArchivo(file) {
+  if (procesando) return;
+  setEstado(`${file.name} seleccionado. Leyendo el reporte...`);
+  setProgreso(2);
+  file.arrayBuffer()
+    .then(buffer => procesarBuffer(buffer))
+    .catch(error => finalizarError(error?.message || "No fue posible leer el archivo."));
+}
+
+async function descargarYProcesarReporte() {
+  if (procesando || descargando) return;
+  descargando = true;
+  setEstado("Descargando y validando el reporte...");
+  setProgreso(2);
+  const button = document.getElementById("btnProcesarNotas");
+  if (button) button.disabled = true;
+  try {
+    const response = await fetch(`${REPORTE_URL}?t=${Date.now()}`, { cache: "no-store", credentials: "omit" });
+    if (!response.ok) throw new Error(`respuesta ${response.status}`);
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength < 1000) throw new Error("el archivo recibido está vacío");
+    descargando = false;
+    procesarBuffer(buffer);
+  } catch (error) {
+    console.warn("Descarga automática no disponible", error);
+    descargando = false;
+    liberarControles();
+    setEstado("No se pudo leer el reporte automáticamente. Descárgalo y selecciónalo aquí.", "warning");
+    descargarReporteAprende();
+  }
 }
 
 function liberarControles() {
   procesando = false;
+  descargando = false;
   const input = document.getElementById("reportFileInput");
   const button = document.getElementById("btnProcesarNotas");
   if (input) input.disabled = false;
@@ -120,7 +151,7 @@ function liberarControles() {
 
 function finalizarError(message) {
   console.error(message);
-  setEstado(`No se modificó Firebase: ${message}`, "error");
+  setEstado(`No se realizaron cambios: ${message}`, "error");
   setProgreso(0);
   liberarControles();
 }
@@ -138,16 +169,15 @@ export function initNotas() {
   if (saved) {
     try {
       const last = JSON.parse(saved);
-      document.getElementById("notasUltimaRevision").textContent = `Última revisión en este navegador: ${new Date(last.fecha).toLocaleString("es-CO")}.`;
+      document.getElementById("notasUltimaRevision").textContent = `Última actualización: ${new Date(last.fecha).toLocaleString("es-CO")}.`;
     } catch { /* resumen local opcional */ }
   }
 }
 
-window.revisarNotas = () => iniciarRevisionNotasManual({ descargar: false });
+window.revisarNotas = () => iniciarRevisionNotasManual({ automatico: true });
 window.descargarReporteNotas = descargarReporteAprende;
-window.abrirActualizacionRepositorio = abrirActualizacionRepositorio;
 window.procesarReporteNotas = () => {
   const file = document.getElementById("reportFileInput")?.files?.[0];
-  if (!file) return setEstado("Primero selecciona el archivo reporteglobal.xlsx.", "warning");
-  procesarArchivo(file);
+  if (file) procesarArchivo(file);
+  else descargarYProcesarReporte();
 };

@@ -10,7 +10,10 @@ import {
   puedeCertificar,
   secuenciaCertificado,
 } from "./assets/js/certificados-core.js";
-import { mapearEncabezados, normalizarFilaExcel, normalizarNombreCurso } from "./assets/js/utils.js";
+import {
+  CONSOLIDADO_HEADERS, detectarFilaEncabezados, mapearEncabezados,
+  normalizarFilaExcel, normalizarNombreCurso, registroAFormatoConsolidado,
+} from "./assets/js/utils.js";
 import { nombresCompatibles, planificarActualizacionesNotas, tipoCursoPlataforma } from "./assets/js/notas-core.js";
 import {
   TAMANO_LOTE_FIRESTORE, categorizarFilasImportacion, idDeterministaRegistro,
@@ -106,6 +109,21 @@ assert.equal(migrated.CERT_NUMERO, "CI-15161");
 assert.equal(normalizarNombreCurso("BASICO inicial"), "Básico Inicial");
 assert.equal(normalizarNombreCurso("Básico Recurrente"), "Básico Repaso");
 assert.equal(normalizarNombreCurso("básico repaso"), "Básico Repaso");
+const plantillaHeaders = ["AÑO", "MES", "PROGRAMA DE ENTRENAMIENTO", "CURSO", "INTENSIDAD", "BASE", "FECHA", "HORA", "SALÓN", "GRUPO", "ID", "NOMBRES Y APELLIDOS", "CARGO", "CORREO", "INSTRUCTOR", "ASISTIÓ", "NOTA", "OBSERVACIÓN", "RADICADO", "BASE CURSO", "INCIAL", "VMP I", "RECURRENTE", "VMP R", "ME", "OB"];
+assert.deepEqual(CONSOLIDADO_HEADERS, plantillaHeaders);
+const detectedHeaders = detectarFilaEncabezados([
+  ["Etiquetas de fila", "Cuenta de ID"],
+  [],
+  plantillaHeaders,
+]);
+assert.equal(detectedHeaders.index, 2);
+assert.equal(detectedHeaders.mapa.ID, "ID");
+assert.equal(detectedHeaders.mapa.NOMBRES, "NOMBRES Y APELLIDOS");
+const exportedRecord = registroAFormatoConsolidado({ ...records[0], FECHA: "2026-08-31", CURSO: "Básico recurrente" });
+assert.equal(exportedRecord["AÑO"], 2026);
+assert.equal(exportedRecord["MES"], 8);
+assert.equal(exportedRecord.CURSO, "Básico Repaso");
+assert.equal(Object.keys(exportedRecord).length, CONSOLIDADO_HEADERS.length);
 assert.equal(tipoCursoPlataforma("Mercancías Peligrosas BÁSICO INICIAL"), "inicial");
 assert.equal(tipoCursoPlataforma("Básico recurrencia"), "recurrente");
 assert.equal(nombresCompatibles("GERALDINE ROJAS GARCIA", "Geraldine Rojas García"), true);

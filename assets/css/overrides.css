@@ -291,6 +291,50 @@ body { background: var(--canvas); }
 .notes-metrics strong { display: block; margin-top: 2px; color: var(--navy-900); font-size: 1.25rem; }
 .grade-verified { color: #16866a; margin-left: 6px; font-size: .78rem; }
 .notes-source { padding: 9px 1px; color: var(--text-muted); font-size: .78rem; }
+.notes-file-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
+.notes-file-button { margin: 0; cursor: pointer; }
+
+.grid-edit-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #b8c7dc;
+  background: #eef5ff;
+  color: var(--navy-900);
+}
+.grid-edit-bar > div { display: flex; align-items: center; gap: 9px; }
+.grid-edit-bar > div:first-child { align-items: flex-start; flex-direction: column; gap: 1px; }
+.grid-edit-bar span { color: var(--text-muted); font-size: .72rem; }
+.grid-editing .desktop-table-wrap { outline: 2px solid color-mix(in srgb, var(--azure) 35%, transparent); outline-offset: -2px; }
+.enterprise-table td.sheet-cell {
+  min-width: 110px;
+  cursor: text;
+  overflow: visible;
+  text-overflow: clip;
+  background: var(--surface);
+  box-shadow: inset -1px -1px 0 var(--border-subtle);
+}
+.enterprise-table td.sheet-cell[data-grid-field="NOMBRES"],
+.enterprise-table td.sheet-cell[data-grid-field="PROGRAMA"],
+.enterprise-table td.sheet-cell[data-grid-field="OBSERVACION"] { min-width: 220px; }
+.enterprise-table td.sheet-cell:focus {
+  position: relative;
+  z-index: 3;
+  outline: 2px solid var(--azure);
+  outline-offset: -2px;
+  background: #fff;
+}
+.enterprise-table td.sheet-cell.is-dirty { background: #fff4ce; }
+
+@media (max-width: 780px) {
+  .grid-edit-bar { align-items: stretch; flex-direction: column; }
+  .grid-edit-bar > div:last-child { flex-wrap: wrap; }
+}
 .notes-course-map { display: grid; gap: 8px; margin-top: 8px; }
 .notes-course-map > div { display: grid; gap: 3px; padding: 12px; border-left: 3px solid #742774; background: #f8f4f9; }
 .notes-course-map span { color: #742774; font-size: .7rem; font-weight: 700; text-transform: uppercase; }
